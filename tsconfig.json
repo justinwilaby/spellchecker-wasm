@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "esnext",
+    "outDir": "lib",
+    "declaration": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "lib": [
+    "es2017",
+    "esnext",
+    "node"
+  ],
+  "include": [
+    "src/js/**/*.ts"
+  ],
+  "exclude": [
+    "src/js/**/*.spec.ts"
+  ]
+}

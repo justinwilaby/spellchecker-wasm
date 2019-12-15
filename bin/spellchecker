@@ -1,0 +1,28 @@
+#!/usr/bin/env node
+const { resolve }  = require('path');
+const { Worker, MessageChannel }  = require('worker_threads');
+const { deserializeSuggestedItems }  = require('../lib/utils');
+
+const { port1, port2 } = new MessageChannel();
+
+const worker = new Worker(resolve(__dirname, '../lib/SpellcheckerWorker.js'));
+
+worker.once("online", () => {
+    const wasmPath = resolve(__dirname, '../lib/spellchecker-wasm.wasm');
+    const dictionaryLocation = resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt');
+    worker.postMessage([port2, wasmPath, dictionaryLocation], [port2]);
+});
+
+port1.addListener('message', (data) => {
+    if (data === 'ready') {
+        process.stdout.write('Ready\n');
+        return;
+    }
+
+    const results = deserializeSuggestedItems(data, 0, data.length);
+    process.stdout.write('' + results.map(r => r.term) + '\n');
+});
+
+process.stdin.on('data', data => {
+    port1.postMessage('' + data);
+});

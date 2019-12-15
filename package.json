@@ -1,0 +1,50 @@
+{
+  "name": "spellchecker-wasm",
+  "version": "0.1.0",
+  "repository": "https://github.com/justinwilaby/sax-wasm",
+  "description": "An extremely fast multi-thread capable Spellchecker written in Rust compiled to WebAssembly for Node.",
+  "main": "lib/index.js",
+  "files": [
+    "lib",
+    "bin"
+  ],
+  "scripts": {
+    "test": "nyc --reporter=text mocha",
+    "test:coveralls": "npm run test && nyc report --reporter=text-lcov | coveralls",
+    "build:wasm": "rustc ./src/lib.rs -Clto -O --crate-type cdylib --target wasm32-unknown-unknown -o ./lib/spellchecker-wasm.wasm",
+    "bindgen": "wasm-bindgen lib/spellchecker-wasm.wasm --out-dir lib/ --remove-name-section --no-typescript --out-name spellchecker-wasm.wasm",
+    "build": "npm run build:ts && npm run build:wasm && npm run bindgen",
+    "build:ts": "tsc"
+  },
+  "keywords": [
+    "spellchecker",
+    "spell-checker",
+    "spelling",
+    "electron",
+    "wasm",
+    "webassembly",
+    "node",
+    "symspell"
+  ],
+  "author": "Justin Wilaby",
+  "license": "MIT",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "bin": {
+    "spellcheck": "./bin/spellchecker"
+  },
+  "devDependencies": {
+    "@istanbuljs/nyc-config-typescript": "^0.1.3",
+    "@types/expect.js": "^0.3.29",
+    "@types/mocha": "^5.2.7",
+    "@types/node": "^12.0.8",
+    "coveralls": "^3.0.6",
+    "expect.js": "^0.3.1",
+    "mocha": "^6.2.0",
+    "nyc": "^14.1.1",
+    "source-map-support": "^0.5.13",
+    "ts-node": "^8.5.4",
+    "typescript": "^3.7.3"
+  }
+}
