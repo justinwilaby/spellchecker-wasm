@@ -34,7 +34,7 @@ mod tests {
     #[test]
     fn write_to_dictionary_test() -> Result<()> {
         let mut sym_spell = SymSpell::new(Some(MAX_EDIT_DISTANCE), Some(PREFIX_LENGTH), None);
-        let f = File::open("frequency_dictionary_en_82_765.txt")?;
+        let f = File::open("lib/frequency_dictionary_en_82_765.txt")?;
         let mut reader = BufReader::new(f);
         let mut s = String::new();
 
@@ -47,7 +47,7 @@ mod tests {
             s.truncate(0);
         }
 
-        let result = sym_spell.lookup("for", Verbosity::Closest, 2, false);
+        let result = sym_spell.lookup("asdf", Verbosity::Closest, 2, false);
 
         Ok(())
     }

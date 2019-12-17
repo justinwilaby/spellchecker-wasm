@@ -23,13 +23,13 @@ npm i -s spellchecker-wasm
 ```js
 // Within the preload script
 const { webFrame } = require('electron');
-const { SpellCheckWasm }  = require('spellchecker-wasm');
+const { SpellcheckerWasm }  = require('spellchecker-wasm');
 
 const wasmPath = require.resolve('spellchecker-wasm/lib/spellcheck-wasm.wasm');
 const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
-const spellChecker = new SpellCheckerWasm();
+const spellChecker = new SpellcheckerWasm();
 
-spellChecker.prepareSpellcheck(wasmPath, dictionaryLocation)
+spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation)
     .then(() => {
         let suggestions;
         spellChecker.resultsHandler = results => {
@@ -53,11 +53,11 @@ spellChecker.prepareSpellcheck(wasmPath, dictionaryLocation)
 
 ## Usage in Node
 ```typescript
-import { SpellCheckWasm } from 'spellchecker-wasm';
+import { SpellcheckerWasm } from 'spellchecker-wasm';
 const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
 const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
 
-const spellChecker = new SpellCheckerWasm(resultHandler);
+const spellChecker = new SpellcheckerWasm(resultHandler);
 spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation)
     .then(() => {
         ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(spellChecker.checkSpelling);
