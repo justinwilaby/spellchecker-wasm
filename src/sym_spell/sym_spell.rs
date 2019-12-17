@@ -225,11 +225,11 @@ impl SymSpell {
             }
             let delete = unsafe { String::from_utf8_unchecked(slice) };
             if !delete_words.contains(&delete) {
+                delete_words.insert(delete.clone());
                 if edit_distance < self.dictionary_edit_distance {
                     // recursion, if maximum edit distance not yet reached
                     self.edits(&delete, edit_distance, delete_words);
                 }
-                delete_words.insert(delete);
             }
         }
     }
