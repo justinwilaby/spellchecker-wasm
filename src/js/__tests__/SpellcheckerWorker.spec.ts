@@ -4,15 +4,14 @@ import {deserializeSuggestedItems} from '../utils';
 import {equal} from 'assert';
 import {SuggestedItem} from "../SuggestedItem";
 
-describe('The SpellcheckerWorker', function () {
-    this.timeout(4000);
+describe('The SpellcheckerWorker', function() {
+    this.timeout(15000);
     const {port1, port2} = new MessageChannel();
     let worker: Worker;
     after(() => {
         worker.terminate();
     });
     before(async () => {
-
         worker = new Worker(resolve(__dirname, '../../../lib/SpellcheckerWorker.js'));
         worker.once("online", () => {
             const wasmPath = resolve(__dirname, '../../../lib/spellchecker-wasm.wasm');
