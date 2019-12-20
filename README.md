@@ -1,5 +1,8 @@
 # An Extremely Fast Spellchecker in WebAssembly
 
+[![Build Status](https://travis-ci.org/justinwilaby/spellchecker-wasm.svg?branch=master)](https://travis-ci.org/justinwilaby/spellchecker-wasm)
+[![Coverage Status](https://coveralls.io/repos/github/justinwilaby/spellchecker-wasm/badge.svg?branch=master)](https://coveralls.io/github/justinwilaby/spellchecker-wasm?branch=master)
+
 *When you absolutely, positively have to have the fastest spellchecker in the room, accept no substitutes.*
 
 Sub-millisecond benchmarks bring **near native speeds** to spellchecking in Node. Plug and play out of the box (batteries included).
