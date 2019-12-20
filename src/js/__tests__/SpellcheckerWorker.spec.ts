@@ -1,7 +1,7 @@
 import {resolve} from 'path';
 import {Worker, MessageChannel} from 'worker_threads';
 import {deserializeSuggestedItems} from '../utils';
-import {equal, notEqual} from 'assert';
+import {equal} from 'assert';
 import {SuggestedItem} from "../SuggestedItem";
 
 describe('The SpellcheckerWorker', () => {
@@ -10,7 +10,8 @@ describe('The SpellcheckerWorker', () => {
     after(() => {
         worker.terminate();
     });
-    before(async () => {
+    before(async function() {
+        this.timeout(4000);
         worker = new Worker(resolve(__dirname, '../../../lib/SpellcheckerWorker.js'));
         worker.once("online", () => {
             const wasmPath = resolve(__dirname, '../../../lib/spellchecker-wasm.wasm');
