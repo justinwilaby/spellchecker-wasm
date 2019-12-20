@@ -4,3 +4,4 @@ Cargo.lock
 /node_modules
 /coverage
 /.idea
+/.nyc_output

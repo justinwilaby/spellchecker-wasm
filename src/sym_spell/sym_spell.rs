@@ -188,22 +188,26 @@ impl SymSpell {
     /// Parses a str into the words that comprise it while omitting
     /// non alphanumeric chars
     fn parse_words(text: &str) -> Vec<String> {
-        let mut words = Vec::new();
+        let mut words = vec![];
         let mut last_char_alpha_numeric = false;
         let mut cursor = 0;
-        let it = GraphemeClusters::new(text);
-        for (grapheme, range) in it {
+        let gc = GraphemeClusters::new(text);
+        let len = gc.len();
+        for i in 0..len {
+            let grapheme = &gc[i];
             let alpha_numeric = is_alpha_numeric(grapheme);
             if !alpha_numeric {
                 if last_char_alpha_numeric {
-                    words.push(unsafe { String::from(text.get_unchecked(cursor..range.end - 1)) });
+                    let range = gc.get_slice_range(cursor..i);
+                    words.push(String::from(&text[range]));
                 }
-                cursor = range.end;
+                cursor = i;
             }
             last_char_alpha_numeric = alpha_numeric;
         }
         if last_char_alpha_numeric && cursor != text.len() {
-            words.push(unsafe { String::from(text.get_unchecked(cursor..)) });
+            let range = gc.get_slice_range(cursor..len);
+            words.push(String::from(&text[range]));
         }
         words
     }
@@ -225,11 +229,11 @@ impl SymSpell {
             }
             let delete = unsafe { String::from_utf8_unchecked(slice) };
             if !delete_words.contains(&delete) {
-                delete_words.insert(delete.clone());
                 if edit_distance < self.dictionary_edit_distance {
                     // recursion, if maximum edit distance not yet reached
                     self.edits(&delete, edit_distance, delete_words);
                 }
+                delete_words.insert(delete);
             }
         }
     }
@@ -274,11 +278,12 @@ impl SymSpell {
     /// <summary>Find suggested spellings for a given input word.</summary>
     /// <param name="input">The word being spell checked.</param>
     /// <param name="verbosity">The value controlling the quantity/closeness of the retuned suggestions.</param>
-    /// <param name="maxEditDistance">The maximum edit distance between input and suggested words.</param>
-    /// <param name="includeUnknown">Include input word in suggestions, if no words within edit distance found.</param>
+    /// <param name="max_edit_distance">The maximum edit distance between input and suggested words.</param>
+    /// <param name="include_unknown">Include input word in suggestions, if no words within edit distance found.</param>
+    /// <param name="include_self">Include input word in suggestions, when an exact match is found.</param>
     /// <returns>A List of SuggestItem object representing suggested correct spellings for the input word,
     /// sorted by edit distance, and secondarily by count frequency.</returns>
-    pub fn lookup(&self, input: &str, verbosity: Verbosity, max_edit_distance: usize, include_unknown: bool) -> Vec<SuggestItem> {
+    pub fn lookup(&self, input: &str, verbosity: Verbosity, max_edit_distance: usize, include_unknown: bool, include_self: bool) -> Vec<SuggestItem> {
         //verbosity=Top: the suggestion with the highest term frequency of the suggestions of smallest edit distance found
         //verbosity=Closest: all suggestions of smallest edit distance found, the suggestions are ordered by term frequency
         //verbosity=All: all suggestions <= maxEditDistance, the suggestions are ordered by edit distance, then by term frequency (slower, no early termination)
@@ -292,19 +297,22 @@ impl SymSpell {
 
         let end = |mut suggestions: Vec<SuggestItem>| -> Vec<SuggestItem> {
             if include_unknown && suggestions.is_empty() {
-                suggestions.push(SuggestItem::new(String::from(input), max_edit_distance + 1, 0))
+                suggestions.push(SuggestItem::new(String::from(input), max_edit_distance + 1, 0));
             }
             suggestions
         };
 
         // early exit - word is too big to possibly match any words
-        if input_len - max_edit_distance > self.max_dictionary_word_length {
+        if input_len < max_edit_distance || input_len - max_edit_distance > self.max_dictionary_word_length {
             return end(suggestions);
         }
 
         // quick look for exact match
         if self.words.contains_key(input) {
             // early exit - return exact match, unless caller wants all matches
+            if include_self {
+                suggestions.push(SuggestItem::new(String::from(input), 0, self.words[input]));
+            }
             if verbosity != Verbosity::All {
                 return end(suggestions);
             }
@@ -513,20 +521,19 @@ impl SymSpell {
     /// <returns>A List of SuggestItem object representing suggested correct spellings for the input string.</returns>
     pub fn lookup_compound(&self, input: &str, max_edit_distance: usize) -> Vec<SuggestItem> {
         let term_list = SymSpell::parse_words(input);
-
         let mut suggestion_parts: Vec<SuggestItem> = Vec::new(); // 1 line with separate parts
         let mut distance_comparator = EditDistance::new(DistanceAlgorithm::DamaerauOSA);
 
         // translate every term to its best suggestion, otherwise it remains unchanged
         let mut last_combi = false;
         for i in 0..term_list.len() {
-            let mut suggestions = self.lookup(&term_list[i], Verbosity::Top, max_edit_distance, false); // suggestions for a single term
+            let mut suggestions = self.lookup(&term_list[i], Verbosity::Top, max_edit_distance, false, true); // suggestions for a single term
 
             if i > 0 && !last_combi {
                 let mut combi = String::from(&term_list[i - 1]);
                 combi.push_str(&term_list[i]);
 
-                let mut suggestions_combi = self.lookup(&combi, Verbosity::Top, max_edit_distance, false);
+                let mut suggestions_combi = self.lookup(&combi, Verbosity::Top, max_edit_distance, false, true);
                 if !suggestions_combi.is_empty() {
                     let best1 = suggestion_parts.last().unwrap();
                     let mut best2 = &mut SuggestItem::default();
@@ -580,12 +587,12 @@ impl SymSpell {
                         let part2 = unsafe { term.get_unchecked(part2_range) };
 
                         let mut suggestion_split = SuggestItem::default();
-                        let suggestions1 = self.lookup(part1, Verbosity::Top, max_edit_distance, false);
-                        if !suggestions.is_empty() {
-                            let suggestions2 = self.lookup(part2, Verbosity::Top, max_edit_distance, false);
+                        let suggestions1 = self.lookup(part1, Verbosity::Top, max_edit_distance, false, true);
+                        if !suggestions1.is_empty() {
+                            let suggestions2 = self.lookup(part2, Verbosity::Top, max_edit_distance, false, true);
                             if !suggestions2.is_empty() {
                                 // select best suggestion for split pair
-                                suggestion_split.term.push_str(&suggestions[0].term);
+                                suggestion_split.term.push_str(&suggestions1[0].term);
                                 suggestion_split.term.push_str(" ");
                                 suggestion_split.term.push_str(&suggestions2[0].term);
 
@@ -654,7 +661,7 @@ impl SymSpell {
         for i in 0..len {
             let suggestion_item = &mut suggestion_parts[i];
             s.push_str(&suggestion_item.term);
-            if i != len {
+            if i != len - 1 {
                 s.push_str(" ");
             }
             count *= suggestion_item.count as f64 / N;
@@ -711,7 +718,7 @@ impl SymSpell {
                 let part_len = GraphemeClusters::new(&part).len();
                 top_edit_distance -= part_len;
 
-                let results = self.lookup(&part, Verbosity::Top, max_edit_distance, false);
+                let results = self.lookup(&part, Verbosity::Top, max_edit_distance, false, true);
                 let (top_result, top_probability_log) = if !results.is_empty() {
                     let result = &results[0];
                     top_edit_distance += result.distance;
@@ -800,5 +807,4 @@ mod sym_spell_tests {
         let words = SymSpell::parse_words(text);
         assert_eq!(words.len(), 7)
     }
-
 }

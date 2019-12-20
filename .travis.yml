@@ -1,0 +1,24 @@
+language: rust
+
+node_js:
+  - "lts/*"
+
+notifications:
+  email: false
+
+before_install:
+  - npm prune
+  - cargo install wasm-bindgen-cli
+  - rustup target add wasm32-unknown-unknown --toolchain stable
+  - rustup default stable
+
+install:
+  - nvm install node
+  - npm install
+
+script:
+  - npm run build && npm run test:coveralls
+
+cache:
+  directories:
+    - "node_modules"

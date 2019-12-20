@@ -3,7 +3,8 @@ export interface WasmSymSpell extends WebAssembly.Exports {
     memory: WebAssembly.Memory;
     symspell: (dictionaryEditDistance: number, countThreshold: number) => void;
     lookup: (ptr: number, length: number, verbosity: Verbosity, maxEditDistance: number, includeUnknowns: boolean) => void;
-    write_to_dictionary: (prt: number, offset: number) => void;
+    lookup_compound: (ptr: number, length: number, maxEditDistance: number) => void;
+    write_to_dictionary: (prt: number, length: number, isBigram: boolean) => void;
 }
 export declare enum Verbosity {
     Top = 0,
@@ -43,24 +44,26 @@ export declare class SpellcheckerWasm {
     constructor(resultHandler?: ResultsHandler);
     /**
      * Writes a chunk of bytes to the dictionary. This operation is
-     * usually called several times while streaming the dictionary
-     * file using fs.createReadStream() or fetch().
+     * useful when implementing a custom dictionary where additional
+     * entries are required beyond the supplied corpus.
      *
-     * Caution should be used since writing the entire file at once
-     * often results in a memory out of bounds error. Chunking at 32-64kb
+     * Caution should be used since writing multiple megabytes at once
+     * often results in a memory out of bounds error. Streaming at 32-64kb
      * chunks is recommended.
      *
      * @param chunk Uint8Array The chunk containing the bytes to write
+     * @param isBigram boolean Indicates whether this chunk should be written to the bigram dictionary instead.
      */
-    writeToDictionary(chunk: Uint8Array): void;
+    writeToDictionary(chunk: Uint8Array, isBigram?: boolean): void;
     /**
      * Prepares the spellcheck wasm for use.
      *
      * @param wasmLocation
      * @param dictionaryLocation
+     * @param bigramLocation
      * @param options
      */
-    prepareSpellchecker(wasmLocation: string, dictionaryLocation: string, options?: SymSpellOptions): Promise<boolean>;
+    prepareSpellchecker(wasmLocation: string, dictionaryLocation: string, bigramLocation?: string, options?: SymSpellOptions): Promise<void>;
     /**
      * Performs a single spelling check based on the supplied word and options.
      * The suggestions list will be provided to the resultHandler().
@@ -69,6 +72,14 @@ export declare class SpellcheckerWasm {
      * @param options CheckSpellingOptions The options to use for this spell check lookup
      */
     checkSpelling(word: Uint8Array | string, options?: CheckSpellingOptions): void;
+    /**
+     * Performs a spelling check based on the supplied sentence and options.
+     * The suggestions list will be provided to the resultHandler().
+     *
+     * @param sentence string The sentence to perform spell checking on.
+     * @param options CheckSpellingOptions The options to use for this spell check lookup
+     */
+    checkSpellingCompound(sentence: Uint8Array | string, options?: Pick<CheckSpellingOptions, 'maxEditDistance'>): void;
     /**
      * @internal
      *
@@ -86,6 +97,7 @@ export declare class SpellcheckerWasm {
      * with the new memory buffer reference if needed.
      *
      * @param chunk
+     * @param memory
      */
-    protected writeToBuffer(chunk: Uint8Array): void;
+    protected writeToBuffer(chunk: Uint8Array, memory: WebAssembly.Memory): void;
 }

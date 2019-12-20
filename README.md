@@ -6,22 +6,27 @@ Sub-millisecond benchmarks bring **near native speeds** to spellchecking in Node
 
 Spellcheck-wasm is an extremely fast spellchecker for [WebAssembly](https://developer.mozilla.org/en-US/docs/WebAssembly) complete with
 tooling for leveraging Worker threads to guarantee lightning fast processing of a single word or very large documents *without* the use
-of native Node plugins. 
+of native Node plugins.
 
 This tool is a better alternative to the current Electron solution for providing spell checking. 
 Free yourself of node-gyp and electron-rebuild!
 
 Spellcheck-wasm uses a zero dependency [Rust](https://www.rust-lang.org/en-US/) port of the extremely popular [SymSpell](https://github.com/wolfgarbe/symspell)
-engine with several optimizations for WebAssembly which allows it to easily outperform the original C# version by as much as 50%! 
+engine with several optimizations for WebAssembly which allows it to outperform the original and many of the current ports.  
 
 ## Installation
 ```bash
 npm i -s spellchecker-wasm
 ```
+## as an interactive CLI
+```bash
+npm i -g spellchecker-wasm
+```
+The use `spellcheck` 
 
 ## Usage in Electron
 ```js
-// Within the preload script
+// Within the preload script of your BrowserWindow instance
 const { webFrame } = require('electron');
 const { SpellcheckerWasm }  = require('spellchecker-wasm');
 

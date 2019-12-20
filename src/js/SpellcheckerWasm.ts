@@ -1,5 +1,5 @@
 import {SuggestedItem} from "./SuggestedItem";
-import {deserializeSuggestedItems, encodeString} from "./utils";
+import {deserializeSuggestedItems} from "./utils";
 import {createReadStream, promises} from "fs";
 
 export interface WasmSymSpell extends WebAssembly.Exports {
@@ -10,7 +10,9 @@ export interface WasmSymSpell extends WebAssembly.Exports {
 
     lookup: (ptr: number, length: number, verbosity: Verbosity, maxEditDistance: number, includeUnknowns: boolean) => void;
 
-    write_to_dictionary: (prt: number, offset: number) => void;
+    lookup_compound: (ptr: number, length: number, maxEditDistance: number) => void;
+
+    write_to_dictionary: (prt: number, length: number, isBigram: boolean) => void;
 }
 
 export enum Verbosity {
@@ -77,18 +79,19 @@ export class SpellcheckerWasm {
 
     /**
      * Writes a chunk of bytes to the dictionary. This operation is
-     * usually called several times while streaming the dictionary
-     * file using fs.createReadStream() or fetch().
+     * useful when implementing a custom dictionary where additional
+     * entries are required beyond the supplied corpus.
      *
-     * Caution should be used since writing the entire file at once
-     * often results in a memory out of bounds error. Chunking at 32-64kb
+     * Caution should be used since writing multiple megabytes at once
+     * often results in a memory out of bounds error. Streaming at 32-64kb
      * chunks is recommended.
      *
      * @param chunk Uint8Array The chunk containing the bytes to write
+     * @param isBigram boolean Indicates whether this chunk should be written to the bigram dictionary instead.
      */
-    public writeToDictionary(chunk: Uint8Array): void {
-        this.writeToBuffer(chunk);
-        this.wasmSymSpell.write_to_dictionary(0, chunk.byteLength);
+    public writeToDictionary(chunk: Uint8Array, isBigram = false): void {
+        this.writeToBuffer(chunk, this.wasmSymSpell.memory);
+        this.wasmSymSpell.write_to_dictionary(0, chunk.byteLength, isBigram);
     }
 
     /**
@@ -96,9 +99,15 @@ export class SpellcheckerWasm {
      *
      * @param wasmLocation
      * @param dictionaryLocation
+     * @param bigramLocation
      * @param options
      */
-    public async prepareSpellchecker(wasmLocation: string, dictionaryLocation: string, options: SymSpellOptions = defaultOptions): Promise<boolean> {
+    public async prepareSpellchecker(
+        wasmLocation: string,
+        dictionaryLocation: string,
+        bigramLocation: string = null,
+        options: SymSpellOptions = defaultOptions): Promise<void> {
+
         const wasmBytes = await promises.readFile('' + wasmLocation);
         const result = await WebAssembly.instantiate(wasmBytes, {
             env: {
@@ -109,33 +118,48 @@ export class SpellcheckerWasm {
                 result_handler: this.resultTrap
             }
         });
-        if (result) {
-            let t = process.hrtime();
-            const {symspell, write_to_dictionary, lookup, memory} = result.instance.exports as WasmSymSpell;
-            this.wasmSymSpell = {symspell, write_to_dictionary, lookup, memory};
 
-            symspell(2, 7);
-
-            let writeBuffer;
-            const dictionaryReadStream = createReadStream(dictionaryLocation);
-            let ct = 0;
-            await new Promise(resolve => {
-                dictionaryReadStream.on('data', (chunk) => {
-                    if (!writeBuffer || writeBuffer.buffer !== memory.buffer) {
-                        writeBuffer = new Uint8Array(memory.buffer, 0, chunk.length);
-                        ct++;
-                    }
-                    writeBuffer.set(chunk);
-                    write_to_dictionary(0, chunk.length);
-                });
-
-                dictionaryReadStream.on('close', resolve);
-            });
-            let [s, n] = process.hrtime(t);
-            process.stdout.write(`Dictionary loaded in ${(s * 1000) + n / 1000 / 1000} ms\n`);
-            return
+        if (!result) {
+            throw new Error(`Failed to instantiate the parser.`);
         }
-        throw new Error(`Failed to instantiate the parser.`);
+
+        const {symspell, write_to_dictionary, lookup, lookup_compound, memory} = result.instance.exports as WasmSymSpell;
+        this.wasmSymSpell = {symspell, write_to_dictionary, lookup, lookup_compound, memory};
+
+        symspell(2, 7);
+        const newline = new Uint8Array([10]);
+        await new Promise(resolve => {
+
+            const dictionaryReadStream = createReadStream(dictionaryLocation);
+            dictionaryReadStream.on('data', (chunk) => {
+                this.writeToBuffer(chunk, memory);
+                write_to_dictionary(0, chunk.length, false);
+            });
+
+            dictionaryReadStream.on('close', () => {
+                this.writeToBuffer(newline, memory); // Closes the stream
+                write_to_dictionary(0, 1, false);
+                resolve()
+            });
+        });
+
+        await new Promise(resolve => {
+            if (!bigramLocation) {
+                return resolve();
+            }
+
+            const bigramReadStream = createReadStream(bigramLocation);
+            bigramReadStream.on('data', (chunk) => {
+                this.writeToBuffer(chunk, memory);
+                write_to_dictionary(0, chunk.length, true);
+            });
+
+            bigramReadStream.on('close', () => {
+                this.writeToBuffer(newline, memory); // Closes the stream
+                write_to_dictionary(0, 1, true);
+                resolve();
+            });
+        });
     }
 
     /**
@@ -146,15 +170,34 @@ export class SpellcheckerWasm {
      * @param options CheckSpellingOptions The options to use for this spell check lookup
      */
     public checkSpelling(word: Uint8Array | string, options: CheckSpellingOptions = defaultCheckSpellingOptions): void {
-        const {lookup} = this.wasmSymSpell;
+        const {lookup, memory} = this.wasmSymSpell;
         let encodedString;
         if (word instanceof Uint8Array) {
             encodedString = word;
         } else {
-            encodedString = encodeString(word);
+            encodedString = Buffer.from(word);
         }
-        this.writeToBuffer(encodedString);
+        this.writeToBuffer(encodedString, memory);
         lookup(0, encodedString.byteLength, options.verbosity, options.maxEditDistance, options.includeUnknown);
+    }
+
+    /**
+     * Performs a spelling check based on the supplied sentence and options.
+     * The suggestions list will be provided to the resultHandler().
+     *
+     * @param sentence string The sentence to perform spell checking on.
+     * @param options CheckSpellingOptions The options to use for this spell check lookup
+     */
+    public checkSpellingCompound(sentence: Uint8Array | string, options: Pick<CheckSpellingOptions, 'maxEditDistance'> = defaultCheckSpellingOptions): void {
+        const {lookup_compound, memory} = this.wasmSymSpell;
+        let encodedString;
+        if (sentence instanceof Uint8Array) {
+            encodedString = sentence;
+        } else {
+            encodedString = Buffer.from(sentence);
+        }
+        this.writeToBuffer(encodedString, memory);
+        lookup_compound(0, encodedString.byteLength, options.maxEditDistance);
     }
 
     /**
@@ -178,8 +221,12 @@ export class SpellcheckerWasm {
      * with the new memory buffer reference if needed.
      *
      * @param chunk
+     * @param memory
      */
-    protected writeToBuffer(chunk: Uint8Array): void {
-        new Uint8Array(this.wasmSymSpell.memory.buffer, 0, chunk.byteLength).set(chunk);
+    protected writeToBuffer(chunk: Uint8Array, memory: WebAssembly.Memory): void {
+        if (!this.writeBuffer || this.writeBuffer.buffer !== memory.buffer || this.writeBuffer.byteLength < chunk.byteLength) {
+            this.writeBuffer = new Uint8Array(memory.buffer, 0, chunk.byteLength);
+        }
+        this.writeBuffer.set(chunk, 0);
     }
 }

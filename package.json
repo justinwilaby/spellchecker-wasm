@@ -14,7 +14,8 @@
     "build:wasm": "rustc ./src/lib.rs -Clto -O --crate-type cdylib --target wasm32-unknown-unknown -o ./lib/spellchecker-wasm.wasm",
     "bindgen": "wasm-bindgen lib/spellchecker-wasm.wasm --out-dir lib/ --remove-name-section --no-typescript --out-name spellchecker-wasm.wasm",
     "build": "npm run build:ts && npm run build:wasm && npm run bindgen",
-    "build:ts": "tsc"
+    "build:ts": "tsc",
+    "postinstall": "node ./bin/decompress"
   },
   "keywords": [
     "spellchecker",

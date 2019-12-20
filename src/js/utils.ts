@@ -1,26 +1,5 @@
 import {SuggestedItem} from "./SuggestedItem";
 
-let textDecoder: TextDecoder;
-let textEncoder: TextEncoder;
-
-export function decodeString(data: ArrayBuffer, byteOffset: number, length: number): string {
-    try {
-        return Buffer.from(data, byteOffset, length).toString();
-    } catch (e) {
-        debugger
-        return (textDecoder || (textDecoder = new TextDecoder()))
-            .decode(new Uint8Array(data, byteOffset, length));
-    }
-}
-
-export function encodeString(word: string): Uint8Array {
-    try {
-        return Buffer.from(word);
-    } catch {
-        return (textEncoder || (textEncoder = new TextEncoder())).encode(word);
-    }
-}
-
 export function readU32(buffer: Uint8Array, ptr: number): number {
     return (buffer[ptr + 3] << 24) | (buffer[ptr + 2] << 16) | (buffer[ptr + 1] << 8) | buffer[ptr];
 }
@@ -39,7 +18,7 @@ export function readU32(buffer: Uint8Array, ptr: number): number {
  * @param ptr number The beginning byte for the SuggestedItems
  * @param length number The total number of byes comprising all suggested items in memory.
  */
-export function deserializeSuggestedItems(buffer: ArrayBufferLike, ptr: number, length: number) {
+export function deserializeSuggestedItems(buffer: ArrayBufferLike, ptr: number, length: number): SuggestedItem[] {
     const rawSlice = new Uint8Array(buffer.slice(ptr, ptr + length));
     ptr = 0; // pointer resets to zero when we slice
     // Find each position of the encoded suggest item
