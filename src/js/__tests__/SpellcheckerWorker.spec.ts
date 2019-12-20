@@ -5,7 +5,7 @@ import {equal} from 'assert';
 import {SuggestedItem} from "../SuggestedItem";
 
 describe('The SpellcheckerWorker', function() {
-    this.timeout(15000);
+    this.timeout(5000);
     const {port1, port2} = new MessageChannel();
     let worker: Worker;
     after(() => {

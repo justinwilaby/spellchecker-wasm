@@ -8,7 +8,7 @@ const dictionaryLocation = resolve(__dirname, './frequency_dictionary_en_82_765.
 const bigramLocation = resolve(__dirname, './frequency_bigramdictionary_en_243_342.txt');
 
 describe('SpellcheckerWasm', function() {
-    this.timeout(4000);
+    this.timeout(15000);
     it('should read from the supplied dictionary and perform lookups', async () => {
         let lastResults;
         const resultsHandler = results => {
