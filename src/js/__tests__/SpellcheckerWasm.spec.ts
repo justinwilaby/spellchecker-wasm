@@ -4,8 +4,8 @@ import {equal, deepEqual, notEqual} from 'assert';
 
 const commonMisspellings: { correctSpelling: string, misspellings: string[] }[] = require('./commonMisspellings.json');
 const wasmPath = resolve(__dirname, '../../../lib/spellchecker-wasm.wasm');
-const dictionaryLocation = resolve(__dirname, '../../../lib/frequency_dictionary_en_82_765.txt');
-const bigramLocation = resolve(__dirname, '../../../lib/frequency_bigramdictionary_en_243_342.txt');
+const dictionaryLocation = resolve(__dirname, './frequency_dictionary_en_82_765.txt');
+const bigramLocation = resolve(__dirname, './frequency_bigramdictionary_en_243_342.txt');
 
 describe('SpellcheckerWasm', () => {
 

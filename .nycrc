@@ -1,0 +1,21 @@
+{
+  "extension": [
+    ".ts"
+  ],
+  "include": [
+    "src/**/*.ts"
+  ],
+  "require": [
+    "ts-node/register"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/__test__/**",
+    "**/coverage/**"
+  ],
+  "reporter": [
+    "html"
+  ],
+  "all": false,
+  "cache": true
+}

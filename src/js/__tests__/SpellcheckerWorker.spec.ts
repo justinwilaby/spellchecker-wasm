@@ -6,11 +6,15 @@ import {SuggestedItem} from "../SuggestedItem";
 
 describe('The SpellcheckerWorker', () => {
     const {port1, port2} = new MessageChannel();
+    let worker: Worker;
+    after(() => {
+        worker.terminate();
+    });
     before(async () => {
-        const worker = new Worker(resolve(__dirname, '../../../lib/SpellcheckerWorker.js'));
+        worker = new Worker(resolve(__dirname, '../../../lib/SpellcheckerWorker.js'));
         worker.once("online", () => {
             const wasmPath = resolve(__dirname, '../../../lib/spellchecker-wasm.wasm');
-            const dictionaryLocation = resolve(__dirname, '../../../lib/frequency_dictionary_en_82_765.txt');
+            const dictionaryLocation = resolve(__dirname, './frequency_dictionary_en_82_765.txt');
             worker.postMessage([port2, wasmPath, dictionaryLocation], [port2]);
         });
 
