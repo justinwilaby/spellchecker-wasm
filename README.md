@@ -1,31 +1,37 @@
-# An Extremely Fast Spellchecker in WebAssembly
+# Spellchecker + WebAssembly
 
 [![Build Status](https://travis-ci.org/justinwilaby/spellchecker-wasm.svg?branch=master)](https://travis-ci.org/justinwilaby/spellchecker-wasm)
 [![Coverage Status](https://coveralls.io/repos/github/justinwilaby/spellchecker-wasm/badge.svg?branch=master)](https://coveralls.io/github/justinwilaby/spellchecker-wasm?branch=master)
 
-*When you absolutely, positively have to have the fastest spellchecker in the room, accept no substitutes.*
+* **Fast** - Based on [SymSpell](https://github.com/wolfgarbe/symspell) v6.5 with bigram support.
+* **Plug and play** - out of the box (batteries included).
 
-Sub-millisecond benchmarks bring **near native speeds** to spellchecking in Node. Plug and play out of the box (batteries included).
+*When you absolutely, positively have to have the fastest spellchecker in the room, accept no substitutes.*
 
 Spellcheck-wasm is an extremely fast spellchecker for [WebAssembly](https://developer.mozilla.org/en-US/docs/WebAssembly) complete with
 tooling for leveraging Worker threads to guarantee lightning fast processing of a single word or very large documents *without* the use
-of native Node plugins.
-
-This tool is a better alternative to the current Electron solution for providing spell checking. 
-Free yourself of node-gyp and electron-rebuild!
+of native Node plugins. Sub-millisecond benchmarks bring **near native speeds** to spellchecking in Node.
 
 Spellcheck-wasm uses a zero dependency [Rust](https://www.rust-lang.org/en-US/) port of the extremely popular [SymSpell](https://github.com/wolfgarbe/symspell)
-engine with several optimizations for WebAssembly which allows it to outperform the original and many of the current ports.  
+engine with several optimizations for WebAssembly which allows it to outperform the original and many of the current ports.
+
+✓ Electron
+
+✓ Node
+
+✓ CLI
+
+✓ Workers
 
 ## Installation
 ```bash
 npm i -s spellchecker-wasm
 ```
-## as an interactive CLI
+## As an interactive CLI
 ```bash
 npm i -g spellchecker-wasm
 ```
-The use `spellcheck` 
+Then use `spellcheck` to enter interactive mode
 
 ## Usage in Electron
 ```js
@@ -130,6 +136,7 @@ prepareWorker()
         });
         ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts']
             .forEach(word => port1.postMessage(word));
+        port1.postMessage('multaple wrds are alos acceptible')
     })
     .catch(e => {
         process.stdout.write('' + e);
