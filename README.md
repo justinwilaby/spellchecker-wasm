@@ -13,7 +13,7 @@ tooling for leveraging Worker threads to guarantee lightning fast processing of 
 of native Node plugins. Sub-millisecond benchmarks bring **near native speeds** to spellchecking in Node.
 
 Spellcheck-wasm uses a zero dependency [Rust](https://www.rust-lang.org/en-US/) port of the extremely popular [SymSpell](https://github.com/wolfgarbe/symspell)
-engine with several optimizations for WebAssembly which allows it to outperform the original and many of the current ports.
+engine with several optimizations for WebAssembly.
 
 ✓ Electron
 
