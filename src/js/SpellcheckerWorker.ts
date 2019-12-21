@@ -30,25 +30,30 @@ class SpellcheckerWorker extends SpellcheckerWasm {
         const {memory} = this.wasmSymSpell;
         const slice = new Uint8Array(memory.buffer.slice(ptr, ptr + length));
         this.port2.postMessage(slice);
-    }
+    };
 
-    private initializationMessage = async (value: [MessagePort, string, string]): Promise<void> => {
-        const [port2, wasmPath, dictionaryPath] = value;
+    private initializationMessage = async (value: [MessagePort, string, string, string]): Promise<void> => {
+        const [port2, wasmPath, dictionaryPath, bigramLocation] = value;
 
         this.port2 = port2;
         this.port2.addListener('message', this.inboundMessageHandler);
         try {
-            await this.prepareSpellchecker(wasmPath, dictionaryPath);
+            await this.prepareSpellchecker(wasmPath, dictionaryPath, bigramLocation);
         } catch (e) {
             this.port2.postMessage(`Error: ${e.message}`);
         }
 
         this.port2.postMessage('ready');
-    }
+    };
 
     private inboundMessageHandler = (word: string): void => {
-        this.checkSpelling(word.trim())
-    }
+        const trimmed = word.trim();
+        if (trimmed.includes(' ')) {
+            this.checkSpellingCompound(trimmed);
+        } else {
+            this.checkSpelling(trimmed);
+        }
+    };
 }
 
 const spellcheckWorker = new SpellcheckerWorker();

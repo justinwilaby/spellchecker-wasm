@@ -1,0 +1,24 @@
+const fs = require('fs');
+const zlib = require('zlib');
+const path = require('path');
+
+const bigramLocation = path.resolve(__dirname, '../lib/frequency_bigramdictionary_en_243_342.txt.gz');
+const dictionaryLocation = path.resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt.gz');
+
+zlib.unzip(fs.readFileSync(bigramLocation), (error, data) => {
+    if (error) {
+        process.stderr.write(`Failed to decompress ${error.message}`);
+        return;
+    }
+    fs.writeFileSync(path.resolve(__dirname, '../lib/frequency_bigramdictionary_en_243_342.txt'), data);
+    fs.unlinkSync(bigramLocation);
+});
+
+zlib.unzip(fs.readFileSync(dictionaryLocation), (error, data) => {
+    if (error) {
+        process.stderr.write(`Failed to decompress ${error.message}`);
+        return;
+    }
+    fs.writeFileSync(path.resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt'), data);
+    fs.unlinkSync(dictionaryLocation);
+});

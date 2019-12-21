@@ -1,4 +1,4 @@
-import {decodeString, readU32} from "./utils";
+import {readU32} from "./utils";
 
 export class SuggestedItem {
     private readonly cache = {} as { [prop: string]: any };
@@ -23,8 +23,8 @@ export class SuggestedItem {
         if (this.cache.term) {
             return this.cache.term as string;
         }
-        const termLen = this.data[this.ptr + 8];
-        return (this.cache.term = decodeString(this.data.buffer, this.ptr + 9, termLen));
+        const termLen = readU32(this.data, this.ptr + 8);
+        return (this.cache.term = Buffer.from(this.data.buffer, this.ptr + 12, termLen).toString());
     }
 
     public toJSON(): Pick<SuggestedItem, 'count' | 'distance' | 'term'> {

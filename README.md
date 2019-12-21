@@ -1,27 +1,40 @@
-# An Extremely Fast Spellchecker in WebAssembly
-
+# Spellchecker + WebAssembly
 *When you absolutely, positively have to have the fastest spellchecker in the room, accept no substitutes.*
 
-Sub-millisecond benchmarks bring **near native speeds** to spellchecking in Node. Plug and play out of the box (batteries included).
+[![Build Status](https://travis-ci.org/justinwilaby/spellchecker-wasm.svg?branch=master)](https://travis-ci.org/justinwilaby/spellchecker-wasm)
+[![Coverage Status](https://coveralls.io/repos/github/justinwilaby/spellchecker-wasm/badge.svg?branch=master)](https://coveralls.io/github/justinwilaby/spellchecker-wasm?branch=master)
+
+* **Fast** - Based on [SymSpell](https://github.com/wolfgarbe/symspell) v6.5 with bigram support.
+* **Plug and play** - Ready to go out of the box (batteries included).
 
 Spellcheck-wasm is an extremely fast spellchecker for [WebAssembly](https://developer.mozilla.org/en-US/docs/WebAssembly) complete with
 tooling for leveraging Worker threads to guarantee lightning fast processing of a single word or very large documents *without* the use
-of native Node plugins. 
-
-This tool is a better alternative to the current Electron solution for providing spell checking. 
-Free yourself of node-gyp and electron-rebuild!
+of native Node plugins. Sub-millisecond benchmarks bring **near native speeds** to spellchecking in Node.
 
 Spellcheck-wasm uses a zero dependency [Rust](https://www.rust-lang.org/en-US/) port of the extremely popular [SymSpell](https://github.com/wolfgarbe/symspell)
-engine with several optimizations for WebAssembly which allows it to easily outperform the original C# version by as much as 50%! 
+engine with several optimizations for WebAssembly.
+
+✓ Electron
+
+✓ Node
+
+✓ CLI
+
+✓ Workers
 
 ## Installation
 ```bash
 npm i -s spellchecker-wasm
 ```
+## As an interactive CLI
+```bash
+npm i -g spellchecker-wasm
+```
+Then use `spellcheck` to enter interactive mode
 
 ## Usage in Electron
 ```js
-// Within the preload script
+// Within the preload script of your BrowserWindow instance
 const { webFrame } = require('electron');
 const { SpellcheckerWasm }  = require('spellchecker-wasm');
 
@@ -56,11 +69,14 @@ spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation)
 import { SpellcheckerWasm } from 'spellchecker-wasm';
 const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
 const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
+// Optional bigram support for compound lookups - add only when needed
+const bigramLocation = require.resolve('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt');
 
 const spellChecker = new SpellcheckerWasm(resultHandler);
-spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation)
+spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation)
     .then(() => {
         ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(spellChecker.checkSpelling);
+        spellChecker.checkSpellingCompound('tiss cheks th entir sentance')
     });
 
 function resultHandler(results) {
@@ -77,12 +93,14 @@ import { deserializeSuggestedItems } from './utils';
 
 const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
 const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
+// Optional bigram support for compound lookups - add only when needed
+const bigramLocation = require.resolve('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt');
 // Get references to the MessagePorts used for bi-directional communication
 const { port1, port2 } = new MessageChannel();
 
 async function prepareWorker(): Promise<MessagePort> {
     // Create a new worker and provide it the SpellcheckerWorker.js script
-    const worker = new Worker(resolve(__dirname, 'SpellcheckerWorker.js'));
+    const worker = new Worker(require.resolve('spellchecker-wasm/lib/SpellcheckerWorker.js'));
 
     // Wait for the worker to start executing the script
     // then post a message to it containing the port we 
@@ -90,9 +108,7 @@ async function prepareWorker(): Promise<MessagePort> {
     // of both the spellcheck-wasm.wasm and the 
     // frequency_dictionary_en_82_765.txt.
     worker.once("online", () => {
-        const wasmPath = resolve(__dirname, 'spellchecker-wasm.wasm');
-        const dictionaryLocation = resolve(__dirname, 'frequency_dictionary_en_82_765.txt');
-        worker.postMessage([port2, wasmPath, dictionaryLocation], [port2]);
+        worker.postMessage([port2, wasmPath, dictionaryLocation, bigramLocation], [port2]); // bigramLocation required only for compound lookups
     });
 
     // Listen for messages on port1. The "ready" message indicates
@@ -119,6 +135,7 @@ prepareWorker()
         });
         ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts']
             .forEach(word => port1.postMessage(word));
+        port1.postMessage('multaple wrds are alos acceptible')
     })
     .catch(e => {
         process.stdout.write('' + e);

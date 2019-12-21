@@ -8,7 +8,6 @@ pub struct GraphemeClusters<'a> {
     // A vector of byte indices where the vec
     // index is the grapheme cluster index
     byte_indices: RefCell<Vec<usize>>,
-    length: usize,
 }
 
 impl GraphemeClusters<'_> {
@@ -17,22 +16,15 @@ impl GraphemeClusters<'_> {
             bytes: s.as_bytes(),
             cursor: 0,
             byte_indices: RefCell::new(vec![0]),
-            length: 0,
         }
     }
 
     pub fn len(&self) -> usize {
-        let mut byte_indices = self.byte_indices.borrow_mut();
-        if byte_indices.len() != 1 {
-            return self.length
-        }
-
         let mut len = 0;
         let mut idx = 0;
         while idx != self.bytes.len() {
             let byte = self.bytes[idx];
             idx += GraphemeClusters::grapheme_len(&byte);
-            byte_indices.push(idx);
             len += 1;
         }
         len
@@ -92,7 +84,7 @@ impl<'a> Iterator for GraphemeClusters<'a> {
         }
         let next_byte = &self.bytes[self.cursor];
         let len = GraphemeClusters::grapheme_len(next_byte);
-        let end = self.cursor + len as usize;
+        let end = self.cursor + len;
         let s = unsafe { str::from_utf8_unchecked(&self.bytes[self.cursor..end]) };
         let result = Some((s, self.cursor..end));
         self.cursor = end;
@@ -119,6 +111,15 @@ mod grapheme_iterator_tests {
         let s = "🚀this is a test string🚀";
         let it: Vec<_> = GraphemeClusters::new(s).collect();
         assert_eq!(it.len(), 23);
+    }
+
+    #[test]
+    fn iterator_test2() {
+        let s = "🚀rocket ";
+        let it: Vec<_> = GraphemeClusters::new(s).collect();
+        for (grapheme, range) in it {
+            assert_eq!(grapheme.len() > 0, true)
+        }
     }
 
     #[test]

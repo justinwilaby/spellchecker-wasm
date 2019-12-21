@@ -34,9 +34,9 @@ impl SuggestItem {
 impl Encode<Vec<u8>> for SuggestItem {
     fn encode(&self) -> Vec<u8> {
         unsafe {
-            let ct: [u8; 4] = transmute((self.count as u32).to_le());
-            let dis: [u8; 4] = transmute((self.distance as u32).to_le());
-            let len: [u8; 1] = transmute(self.term.len() as u8);
+            let ct = transmute::<u32, [u8; 4]>(self.count as u32);
+            let dis = transmute::<u32, [u8; 4]>(self.distance as u32);
+            let len = transmute::<u32, [u8; 4]>(self.term.len() as u32);
 
             let mut encoded = vec![];
             encoded.extend_from_slice(&ct);
@@ -51,9 +51,18 @@ impl Encode<Vec<u8>> for SuggestItem {
 
 #[cfg(test)]
 mod suggest_item_tests {
-    use std::mem::transmute;
-
+    use crate::sym_spell::suggested_item::SuggestItem;
+    use crate::sym_spell::Encode;
+    use std::str;
 
     #[test]
-    fn encode_test() {}
+    fn encode_test() {
+        let si = SuggestItem::new("test".into(), 1, 2);
+        let encoded = si.encode();
+        assert_eq!(encoded[0], 2); // count
+        assert_eq!(encoded[4], 1); // distance
+        assert_eq!(encoded[8], 4); // term.len()
+        let term = unsafe { str::from_utf8_unchecked(&encoded[9..])};
+        assert_eq!(term, "test")
+    }
 }

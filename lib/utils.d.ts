@@ -1,6 +1,4 @@
 import { SuggestedItem } from "./SuggestedItem";
-export declare function decodeString(data: ArrayBuffer, byteOffset: number, length: number): string;
-export declare function encodeString(word: string): Uint8Array;
 export declare function readU32(buffer: Uint8Array, ptr: number): number;
 /**
  * Suggested items are encoded by the wasm to be as compact as possible and
