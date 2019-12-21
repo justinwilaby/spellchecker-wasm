@@ -1,12 +1,11 @@
 # Spellchecker + WebAssembly
+*When you absolutely, positively have to have the fastest spellchecker in the room, accept no substitutes.*
 
 [![Build Status](https://travis-ci.org/justinwilaby/spellchecker-wasm.svg?branch=master)](https://travis-ci.org/justinwilaby/spellchecker-wasm)
 [![Coverage Status](https://coveralls.io/repos/github/justinwilaby/spellchecker-wasm/badge.svg?branch=master)](https://coveralls.io/github/justinwilaby/spellchecker-wasm?branch=master)
 
 * **Fast** - Based on [SymSpell](https://github.com/wolfgarbe/symspell) v6.5 with bigram support.
-* **Plug and play** - out of the box (batteries included).
-
-*When you absolutely, positively have to have the fastest spellchecker in the room, accept no substitutes.*
+* **Plug and play** - Ready to go out of the box (batteries included).
 
 Spellcheck-wasm is an extremely fast spellchecker for [WebAssembly](https://developer.mozilla.org/en-US/docs/WebAssembly) complete with
 tooling for leveraging Worker threads to guarantee lightning fast processing of a single word or very large documents *without* the use

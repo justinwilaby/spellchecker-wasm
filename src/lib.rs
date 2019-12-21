@@ -72,4 +72,4 @@ pub mod soft_wx;
 pub mod sym_spell;
 pub mod edit_distance;
 //#[cfg(target_arch = "wasm32")]
-pub mod spellcheck_wasm;
+pub mod spellchecker_wasm;

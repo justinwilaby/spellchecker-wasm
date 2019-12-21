@@ -107,11 +107,10 @@ impl SymSpell {
     pub fn entry_count(&self) -> usize { self.deletes.len() }
 
     pub fn create_dictionary_entry(&mut self, key: String, mut count: usize) -> bool {
-        let mut prev_count = 0;
         // look first in below threshold words, update count, and allow promotion to correct spelling word if count reaches threshold
         // threshold must be >1 for there to be the possibility of low threshold words
         if self.count_threshold > 1 && self.below_threshold_words.contains_key(&key) {
-            prev_count = self.below_threshold_words[&key];
+            let prev_count = self.below_threshold_words[&key];
             // calculate new count for below threshold word
             count = if usize::max_value() - prev_count > count { prev_count + count } else { usize::max_value() };
             // has reached threshold - remove from below threshold collection (it will be added to correct words below)
@@ -122,7 +121,7 @@ impl SymSpell {
                 return false;
             }
         } else if self.words.contains_key(&key) {
-            prev_count = self.words[&key];
+            let prev_count = self.words[&key];
             // just update count if it's an already added above threshold word
             count = if usize::max_value() - prev_count > count { prev_count + count } else { usize::max_value() };
             self.words.insert(key, count);
@@ -187,7 +186,7 @@ impl SymSpell {
 
     /// Parses a str into the words that comprise it while omitting
     /// non alphanumeric chars
-    fn parse_words(text: &str) -> Vec<String> {
+    fn parse_words(text: &str) -> Vec<&str> {
         let mut words = vec![];
         let mut last_char_alpha_numeric = false;
         let mut cursor = 0;
@@ -199,7 +198,7 @@ impl SymSpell {
             if !alpha_numeric {
                 if last_char_alpha_numeric {
                     let range = gc.get_slice_range(cursor..i);
-                    words.push(String::from(&text[range]));
+                    words.push(&text[range]);
                 }
                 cursor = i;
             }
@@ -207,7 +206,7 @@ impl SymSpell {
         }
         if last_char_alpha_numeric && cursor != text.len() {
             let range = gc.get_slice_range(cursor..len);
-            words.push(String::from(&text[range]));
+            words.push(&text[range]);
         }
         words
     }
@@ -326,9 +325,9 @@ impl SymSpell {
         // deletes we've considered already
         let mut deletes_considered: HashSet<String> = HashSet::new();
         // suggestions we've considered already
-        let mut suggestions_considered: HashSet<String> = HashSet::new();
+        let mut suggestions_considered: HashSet<&str> = HashSet::new();
         // we considered the input already in the word.TryGetValue above
-        suggestions_considered.insert(String::from(input));
+        suggestions_considered.insert(input);
 
         let mut max_edit_distance2 = max_edit_distance;
         let mut candidate_pointer = 0;
@@ -424,7 +423,7 @@ impl SymSpell {
                     if candidate_len == 0 {
                         // suggestions which have no common chars with input (inputLen<=maxEditDistance && suggestionLen<=maxEditDistance)
                         distance = input_len.max(suggestion_len);
-                        if distance > max_edit_distance2 || !suggestions_considered.insert(String::from(suggestion)) {
+                        if distance > max_edit_distance2 || !suggestions_considered.insert(suggestion) {
                             continue;
                         }
                     } else if suggestion_len == 1 {
@@ -439,7 +438,7 @@ impl SymSpell {
                     } else {
                         // DeleteInSuggestionPrefix is somewhat expensive, and only pays off when verbosity is Top or Closest.
                         if verbosity != Verbosity::All && !self.delete_in_suggestion_prefix(&candidate, &suggestion) ||
-                            !suggestions_considered.insert(String::from(suggestion)) {
+                            !suggestions_considered.insert(suggestion) {
                             continue;
                         }
                         let distance_comparison = distance_comparator.compare(input, suggestion, Some(max_edit_distance2));
@@ -530,7 +529,7 @@ impl SymSpell {
             let mut suggestions = self.lookup(&term_list[i], Verbosity::Top, max_edit_distance, false, true); // suggestions for a single term
 
             if i > 0 && !last_combi {
-                let mut combi = String::from(&term_list[i - 1]);
+                let mut combi = String::from(term_list[i - 1]);
                 combi.push_str(&term_list[i]);
 
                 let mut suggestions_combi = self.lookup(&combi, Verbosity::Top, max_edit_distance, false, true);
@@ -541,7 +540,7 @@ impl SymSpell {
                         best2 = suggestions.first_mut().unwrap();
                     } else {
                         // unknown word
-                        best2.term = term_list[i].clone();
+                        best2.term = term_list[i].into();
                         // estimated edit distance
                         best2.distance = max_edit_distance + 1;
                         // estimated word occurrence probability P=10 / (N * 10^word length l)
@@ -644,11 +643,11 @@ impl SymSpell {
                     if best_suggestion_split.is_some() {
                         suggestion_parts.push(best_suggestion_split.unwrap())
                     } else {
-                        let si = SuggestItem::new(term.clone(), 10 / 10f64.powf(term_len as f64) as usize, max_edit_distance + 1);
+                        let si = SuggestItem::new(String::from(*term), 10 / 10f64.powf(term_len as f64) as usize, max_edit_distance + 1);
                         suggestion_parts.push(si);
                     }
                 } else {
-                    let si = SuggestItem::new(term_list[i].clone(), 10 / 10f64.powf(term_len as f64) as usize, max_edit_distance + 1);
+                    let si = SuggestItem::new(String::from(term_list[i]), 10 / 10f64.powf(term_len as f64) as usize, max_edit_distance + 1);
                     suggestion_parts.push(si);
                 }
             }
