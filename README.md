@@ -64,11 +64,14 @@ spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation)
 import { SpellcheckerWasm } from 'spellchecker-wasm';
 const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
 const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
+// Optional bigram support for compound lookups - add only when needed
+const bigramLocation = require.resolve('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt');
 
 const spellChecker = new SpellcheckerWasm(resultHandler);
-spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation)
+spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation)
     .then(() => {
         ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(spellChecker.checkSpelling);
+        spellChecker.checkSpellingCompound('tiss cheks th entir sentance')
     });
 
 function resultHandler(results) {
@@ -85,12 +88,14 @@ import { deserializeSuggestedItems } from './utils';
 
 const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
 const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
+// Optional bigram support for compound lookups - add only when needed
+const bigramLocation = require.resolve('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt');
 // Get references to the MessagePorts used for bi-directional communication
 const { port1, port2 } = new MessageChannel();
 
 async function prepareWorker(): Promise<MessagePort> {
     // Create a new worker and provide it the SpellcheckerWorker.js script
-    const worker = new Worker(resolve(__dirname, 'SpellcheckerWorker.js'));
+    const worker = new Worker(require.resolve('spellchecker-wasm/lib/SpellcheckerWorker.js'));
 
     // Wait for the worker to start executing the script
     // then post a message to it containing the port we 
@@ -98,9 +103,7 @@ async function prepareWorker(): Promise<MessagePort> {
     // of both the spellcheck-wasm.wasm and the 
     // frequency_dictionary_en_82_765.txt.
     worker.once("online", () => {
-        const wasmPath = resolve(__dirname, 'spellchecker-wasm.wasm');
-        const dictionaryLocation = resolve(__dirname, 'frequency_dictionary_en_82_765.txt');
-        worker.postMessage([port2, wasmPath, dictionaryLocation], [port2]);
+        worker.postMessage([port2, wasmPath, dictionaryLocation, bigramLocation], [port2]); // bigramLocation required only for compound lookups
     });
 
     // Listen for messages on port1. The "ready" message indicates
