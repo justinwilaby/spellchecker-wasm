@@ -258,13 +258,10 @@ impl SymSpell {
 
     fn insert_delete(&mut self, delete: &str, key: &str) {
         let delete_hash = self.get_string_hash(delete);
-        match self.deletes.get_mut(&delete_hash) {
-            Some(suggestions) => {
-                suggestions.push(key.into());
-            }
-            None => {
-                self.deletes.insert(delete_hash, vec![key.into()]);
-            }
+        if let Some(suggestions) = self.deletes.get_mut(&delete_hash) {
+            suggestions.push(key.to_string());
+        } else {
+            self.deletes.insert(delete_hash, vec![key.to_string()]);
         }
     }
 

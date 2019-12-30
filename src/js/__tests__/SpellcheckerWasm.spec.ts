@@ -1,4 +1,4 @@
-import {SpellcheckerWasm} from '../SpellcheckerWasm';
+import {SpellcheckerWasm} from '../nodejs/SpellcheckerWasm';
 import {resolve} from 'path';
 import {equal, deepEqual, notEqual} from 'assert';
 

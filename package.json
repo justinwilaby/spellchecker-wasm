@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "repository": "https://github.com/justinwilaby/spellchecker-wasm",
   "description": "An extremely fast multi-thread capable Spellchecker written in Rust compiled to WebAssembly for Node.",
-  "main": "lib/index.js",
+  "main": "lib/nodejs/index.js",
   "files": [
     "lib",
     "bin"
@@ -13,8 +13,9 @@
     "test:coveralls": "npm run test && nyc report --reporter=text-lcov | coveralls",
     "build:wasm": "rustc ./src/lib.rs -Clto -O --crate-type cdylib --target wasm32-unknown-unknown -o ./lib/spellchecker-wasm.wasm",
     "bindgen": "wasm-bindgen lib/spellchecker-wasm.wasm --out-dir lib/ --remove-name-section --no-typescript --out-name spellchecker-wasm.wasm",
-    "build": "npm run build:ts && npm run build:wasm && npm run bindgen",
+    "build": "npm run build:ts && npm run webpack && npm run build:wasm && npm run bindgen",
     "build:ts": "tsc",
+    "webpack": "webpack",
     "postinstall": "node ./bin/decompress"
   },
   "keywords": [
@@ -46,6 +47,9 @@
     "nyc": "^14.1.1",
     "source-map-support": "^0.5.13",
     "ts-node": "^8.5.4",
-    "typescript": "^3.7.3"
+    "ts-loader": "^6.2.1",
+    "typescript": "^3.7.3",
+    "webpack": "^4.41.5",
+    "webpack-cli": "^3.3.10"
   }
 }
