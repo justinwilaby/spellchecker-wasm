@@ -1,8 +1,7 @@
 import {resolve} from 'path';
 import {Worker, MessageChannel} from 'worker_threads';
-import {deserializeSuggestedItems} from '../utils';
 import {equal} from 'assert';
-import {SuggestedItem} from "../SuggestedItem";
+import {deserializeSuggestedItems, SuggestedItem} from '../SuggestedItem';
 
 describe('The SpellcheckerWorker', function() {
     this.timeout(5000);

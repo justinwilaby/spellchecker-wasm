@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Web tests</title>
+</head>
+<body>
+<div id="mocha"></div>
+<script>
+    // Testing purposes only. Normally, we'd let webpack define this
+    window.exports = {}
+</script>
+<script src="https://unpkg.com/chai/chai.js"></script>
+<script src="https://unpkg.com/mocha/mocha.js"></script>
+<script class="mocha-init">
+    mocha.setup('bdd');
+    mocha.checkLeaks();
+</script>
+<script src="../../../lib/browser/index.js"></script>
+<script>
+    const {SpellcheckerWasm} = exports['spellchecker-wasm'];
+    const spellchecker = new SpellcheckerWasm();
+    const {notEqual} = window.chai.assert;
+
+    describe('The SpellcheckerWasm', () => {
+        it('should read from the supplied dictionary and perform lookups', async () => {
+            const wasm = await fetch('../../../lib/spellchecker-wasm.wasm');
+            const dictionary = await fetch('./frequency_dictionary_en_82_765.txt');
+            const misspellings = await fetch('./commonMisspellings.json');
+            const commonMisspellings = await misspellings.json();
+
+            let lastResults;
+            spellchecker.resultHandler = results => {
+                lastResults = results;
+            };
+            const t = performance.now();
+            await spellchecker.prepareSpellchecker(wasm, dictionary);
+            console.log(`standard dictionary loaded in ${performance.now() - t} ms\n`);
+            let lookupTimes = [];
+            commonMisspellings.forEach(({correctSpelling, misspellings}) => {
+                misspellings.forEach(word => {
+                    const t = performance.now();
+                    spellchecker.checkSpelling(word.toLowerCase());
+                    const s = performance.now();
+                    lookupTimes.push(performance.now() - t);
+                    const terms = lastResults.map(result => result.term);
+                    notEqual(terms.indexOf(correctSpelling.toLowerCase()), -1);
+                });
+            });
+            const totalTime = lookupTimes.reduce((previousValue, currentValue) => (previousValue += currentValue));
+            console.log(`Average lookup time: ${totalTime / lookupTimes.length} ms\n`);
+        });
+    }, 5000);
+
+</script>
+<script class="mocha-exec">
+    mocha.run();
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
     ".ts"
   ],
   "include": [
-    "src/**/*.ts"
+    "src/js/**/*.ts"
   ],
   "require": [
     "ts-node/register"

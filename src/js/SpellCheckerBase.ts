@@ -1,6 +1,4 @@
-import {SuggestedItem} from "./SuggestedItem";
-import {deserializeSuggestedItems} from "./utils";
-import {createReadStream, promises} from "fs";
+import {deserializeSuggestedItems, SuggestedItem} from "./SuggestedItem";
 
 export interface WasmSymSpell extends WebAssembly.Exports {
     memory: WebAssembly.Memory;
@@ -49,12 +47,12 @@ export interface CheckSpellingOptions {
 
 export type ResultsHandler = (suggestedItems: SuggestedItem[]) => void;
 
-const defaultOptions: SymSpellOptions = {
+export const defaultOptions: SymSpellOptions = {
     dictionaryEditDistance: 7,
     countThreshold: 1
 };
 
-const defaultCheckSpellingOptions: CheckSpellingOptions = {
+export const defaultCheckSpellingOptions: CheckSpellingOptions = {
     includeUnknown: false,
     maxEditDistance: 2,
     verbosity: Verbosity.Closest
@@ -63,7 +61,7 @@ const defaultCheckSpellingOptions: CheckSpellingOptions = {
 /**
  * This class provides the wrapper for the spellcheck-wasm.wasm functionality.
  */
-export class SpellcheckerWasm {
+export abstract class SpellcheckerBase {
     protected wasmSymSpell: WasmSymSpell;
     protected writeBuffer: Uint8Array;
 
@@ -73,9 +71,11 @@ export class SpellcheckerWasm {
      */
     public resultHandler: ResultsHandler;
 
-    constructor(resultHandler?: ResultsHandler) {
+    protected constructor(resultHandler?: ResultsHandler) {
         this.resultHandler = resultHandler;
     }
+
+    protected abstract encodeString(str: string): Uint8Array;
 
     /**
      * Writes a chunk of bytes to the dictionary. This operation is
@@ -102,65 +102,16 @@ export class SpellcheckerWasm {
      * @param bigramLocation
      * @param options
      */
-    public async prepareSpellchecker(
+    public abstract async prepareSpellchecker(
         wasmLocation: string,
         dictionaryLocation: string,
-        bigramLocation: string = null,
-        options: SymSpellOptions = defaultOptions): Promise<void> {
-
-        const wasmBytes = await promises.readFile('' + wasmLocation);
-        const result = await WebAssembly.instantiate(wasmBytes, {
-            env: {
-                memoryBase: 0,
-                tableBase: 0,
-                memory: new WebAssembly.Memory({initial: 1}),
-                table: new WebAssembly.Table({initial: 1, element: 'anyfunc'}),
-                result_handler: this.resultTrap
-            }
-        });
-
-        if (!result) {
-            throw new Error(`Failed to instantiate the parser.`);
-        }
-
-        const {symspell, write_to_dictionary, lookup, lookup_compound, memory} = result.instance.exports as WasmSymSpell;
-        this.wasmSymSpell = {symspell, write_to_dictionary, lookup, lookup_compound, memory};
-
-        symspell(2, 7);
-        const newline = new Uint8Array([10]);
-        await new Promise(resolve => {
-
-            const dictionaryReadStream = createReadStream(dictionaryLocation);
-            dictionaryReadStream.on('data', (chunk) => {
-                this.writeToBuffer(chunk, memory);
-                write_to_dictionary(0, chunk.length, false);
-            });
-
-            dictionaryReadStream.on('close', () => {
-                this.writeToBuffer(newline, memory); // Closes the stream
-                write_to_dictionary(0, 1, false);
-                resolve()
-            });
-        });
-
-        await new Promise(resolve => {
-            if (!bigramLocation) {
-                return resolve();
-            }
-
-            const bigramReadStream = createReadStream(bigramLocation);
-            bigramReadStream.on('data', (chunk) => {
-                this.writeToBuffer(chunk, memory);
-                write_to_dictionary(0, chunk.length, true);
-            });
-
-            bigramReadStream.on('close', () => {
-                this.writeToBuffer(newline, memory); // Closes the stream
-                write_to_dictionary(0, 1, true);
-                resolve();
-            });
-        });
-    }
+        bigramLocation: string,
+        options: SymSpellOptions): Promise<void>;
+    public abstract async prepareSpellchecker(
+        wasFetchResponse: Response,
+        dictionaryFetchResponse: Response,
+        bigramFetchResponse: Response,
+        options: SymSpellOptions): Promise<void>
 
     /**
      * Performs a single spelling check based on the supplied word and options.
@@ -175,7 +126,7 @@ export class SpellcheckerWasm {
         if (word instanceof Uint8Array) {
             encodedString = word;
         } else {
-            encodedString = Buffer.from(word);
+            encodedString = this.encodeString(word);
         }
         this.writeToBuffer(encodedString, memory);
         lookup(0, encodedString.byteLength, options.verbosity, options.maxEditDistance, options.includeUnknown);
@@ -194,7 +145,7 @@ export class SpellcheckerWasm {
         if (sentence instanceof Uint8Array) {
             encodedString = sentence;
         } else {
-            encodedString = Buffer.from(sentence);
+            encodedString = this.encodeString(sentence);
         }
         this.writeToBuffer(encodedString, memory);
         lookup_compound(0, encodedString.byteLength, options.maxEditDistance);
@@ -212,7 +163,7 @@ export class SpellcheckerWasm {
     protected resultTrap = (ptr: number, length: number): void => {
         const {memory} = this.wasmSymSpell;
         this.resultHandler(deserializeSuggestedItems(memory.buffer, ptr, length));
-    }
+    };
 
     /**
      * Allocations within the WASM process

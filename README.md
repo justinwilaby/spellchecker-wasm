@@ -4,7 +4,7 @@
 [![Build Status](https://travis-ci.org/justinwilaby/spellchecker-wasm.svg?branch=master)](https://travis-ci.org/justinwilaby/spellchecker-wasm)
 [![Coverage Status](https://coveralls.io/repos/github/justinwilaby/spellchecker-wasm/badge.svg?branch=master)](https://coveralls.io/github/justinwilaby/spellchecker-wasm?branch=master)
 
-* **Fast** - Based on [SymSpell](https://github.com/wolfgarbe/symspell) v6.5 with bigram support.
+* **Fast** - Based on [SymSpell](https://github.com/wolfgarbe/symspell) v6.6 with bigram support.
 * **Plug and play** - Ready to go out of the box (batteries included).
 
 Spellcheck-wasm is an extremely fast spellchecker for [WebAssembly](https://developer.mozilla.org/en-US/docs/WebAssembly) complete with
@@ -14,13 +14,13 @@ of native Node plugins. Sub-millisecond benchmarks bring **near native speeds** 
 Spellcheck-wasm uses a zero dependency [Rust](https://www.rust-lang.org/en-US/) port of the extremely popular [SymSpell](https://github.com/wolfgarbe/symspell)
 engine with several optimizations for WebAssembly.
 
-✓ Electron
-
-✓ Node
-
-✓ CLI
-
-✓ Workers
+|               |            |
+|---------------|-----------:|
+| Electron      |      ✓     |
+| Node          |      ✓     |
+| Browsers      |      ✓     |
+| Workers       |      ✓     |
+| Cli           |      ✓     |
 
 ## Installation
 ```bash
@@ -40,12 +40,12 @@ const { SpellcheckerWasm }  = require('spellchecker-wasm');
 
 const wasmPath = require.resolve('spellchecker-wasm/lib/spellcheck-wasm.wasm');
 const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
-const spellChecker = new SpellcheckerWasm();
+const spellchecker = new SpellcheckerWasm();
 
-spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation)
+spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation)
     .then(() => {
         let suggestions;
-        spellChecker.resultsHandler = results => {
+        spellchecker.resultsHandler = results => {
             suggestions = results;
         };
 
@@ -53,7 +53,7 @@ spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation)
             spellCheck(words, callback) {
                 const misspelledWords = [];
                 words.forEach(word => {
-                    spellChecker.checkSpelling(word); // synchronous
+                    spellchecker.checkSpelling(word); // synchronous
                     if (suggestions.length) {
                         misspelledWords.push(word);
                     }
@@ -72,11 +72,11 @@ const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dict
 // Optional bigram support for compound lookups - add only when needed
 const bigramLocation = require.resolve('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt');
 
-const spellChecker = new SpellcheckerWasm(resultHandler);
+const spellchecker = new SpellcheckerWasm(resultHandler);
 spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation)
     .then(() => {
-        ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(spellChecker.checkSpelling);
-        spellChecker.checkSpellingCompound('tiss cheks th entir sentance')
+        ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(word => spellchecker.checkSpelling(word));
+        spellchecker.checkSpellingCompound('tiss cheks th entir sentance')
     });
 
 function resultHandler(results) {
@@ -141,7 +141,25 @@ prepareWorker()
         process.stdout.write('' + e);
     });
 ```
+## Usage in the Browser
+```js
+async function initializeSpellchecker() {
+    const wasm = await fetch('spellchecker-wasm/lib/spellchecker-wasm.wasm');
+    const dictionary = await fetch('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
+    const bigramLocation = await fetch('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt'); // Optional
 
+    await spellchecker.prepareSpellchecker(wasm, dictionary, bigramLocation);
+    return spellchecker;
+}
+
+initializeSpellchecker.then(spellchecker => {
+    spellchecker.resultHandler = result => {
+        ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(word => spellchecker.checkSpelling(word));
+        spellchecker.checkSpellingCompound('tiss cheks th entir sentance');
+    }
+    spellchecker.checkSpelling();
+});
+```
 ## Building from source
 ### Prerequisites
 
