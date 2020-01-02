@@ -23,8 +23,9 @@ export class SuggestedItem {
         if (this.cache.term) {
             return this.cache.term as string;
         }
-        const termLen = readU32(this.data, this.ptr + 8);
-        return (this.cache.term = SuggestedItem.decodeString(new Uint8Array(this.data.buffer, this.ptr + 12, termLen)));
+        const start = this.ptr + 12;
+        const end = start + readU32(this.data, this.ptr + 8);
+        return (this.cache.term = SuggestedItem.decodeString(this.data.slice(start, end)));
     }
 
     public toJSON(): Pick<SuggestedItem, 'count' | 'distance' | 'term'> {

@@ -4,7 +4,7 @@
 [![Build Status](https://travis-ci.org/justinwilaby/spellchecker-wasm.svg?branch=master)](https://travis-ci.org/justinwilaby/spellchecker-wasm)
 [![Coverage Status](https://coveralls.io/repos/github/justinwilaby/spellchecker-wasm/badge.svg?branch=master)](https://coveralls.io/github/justinwilaby/spellchecker-wasm?branch=master)
 
-* **Fast** - Based on [SymSpell](https://github.com/wolfgarbe/symspell) v6.5 with bigram support.
+* **Fast** - Based on [SymSpell](https://github.com/wolfgarbe/symspell) v6.6 with bigram support.
 * **Plug and play** - Ready to go out of the box (batteries included).
 
 Spellcheck-wasm is an extremely fast spellchecker for [WebAssembly](https://developer.mozilla.org/en-US/docs/WebAssembly) complete with

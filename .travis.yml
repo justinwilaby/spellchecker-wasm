@@ -3,21 +3,24 @@ language: rust
 node_js:
   - "lts/*"
 
+addons:
+  chrome: stable
+
 notifications:
   email: false
 
 before_install:
-  - npm prune
   - cargo install wasm-bindgen-cli
   - rustup target add wasm32-unknown-unknown --toolchain stable
   - rustup default stable
 
 install:
   - nvm install node
+  - npm i -g http-server
   - npm install
 
 script:
-  - npm run build && npm run test:coveralls
+  - npm run build && npm run test:web-integration && npm run test:coveralls
 
 cache:
   directories:

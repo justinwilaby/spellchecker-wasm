@@ -12,7 +12,8 @@ export class SpellcheckerWasm extends SpellcheckerBase {
 
     constructor(resultHandler?: ResultsHandler) {
         super(resultHandler);
-        SuggestedItem.decodeString = new TextDecoder().decode;
+        const decoder = new TextDecoder();
+        SuggestedItem.decodeString = bytes => decoder.decode(bytes);
     }
 
     protected encodeString(str: string): Uint8Array {
