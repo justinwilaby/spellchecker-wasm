@@ -143,21 +143,23 @@ prepareWorker()
 ```
 ## Usage in the Browser
 ```js
+import { SpellcheckerWasm } from 'spellchecker-wasm/lib/browser/index.js';
+
+let resultHandler = (results) => console.log("Results : ", results.map(result => result.term));
+
 async function initializeSpellchecker() {
     const wasm = await fetch('spellchecker-wasm/lib/spellchecker-wasm.wasm');
     const dictionary = await fetch('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
     const bigramLocation = await fetch('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt'); // Optional
 
+    const spellchecker = new SpellcheckerWasm(resultHandler);
     await spellchecker.prepareSpellchecker(wasm, dictionary, bigramLocation);
     return spellchecker;
 }
 
-initializeSpellchecker.then(spellchecker => {
-    spellchecker.resultHandler = result => {
-        ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(word => spellchecker.checkSpelling(word));
-        spellchecker.checkSpellingCompound('tiss cheks th entir sentance');
-    }
-    spellchecker.checkSpelling();
+initializeSpellchecker().then(spellchecker => {
+    ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(word => spellchecker.checkSpelling(word));
+    spellchecker.checkSpellingCompound('tiss cheks th entir sentance');
 });
 ```
 ## Building from source
