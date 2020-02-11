@@ -78,5 +78,17 @@ describe('SpellcheckerWasm', function() {
         spellchecker.writeToDictionary(Buffer.from('asdf 10000\n'));
         spellchecker.checkSpelling('asdf');
         equal(lastResults.length, 0);
-    })
+    });
+
+    it('should perform lookups on words containing accented chars', async () => {
+        let lastResults;
+        const resultsHandler = results => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation);
+        spellchecker.checkSpelling('crèche');
+        deepEqual(lastResults[0].toJSON(), {"count":19317,"distance":1,"term":"creche"});
+    });
 });
