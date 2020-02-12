@@ -7,12 +7,22 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Text;
 
-class HelloWorld {
+class FrequencyDictionary {
  static void Main() {
-  Console.WriteLine("Creating aspell frequency dictionary");
+  // Spelling dictionary
+  // http://app.aspell.net/create?defaults=en_US
+  // http://wordlist.aspell.net/
+  string aspellScowlFilepath = @"scowl-60size-0var-en_US.txt";
 
+  // Google ngrams
+  // http://storage.googleapis.com/books/ngrams/books/datasetsv2.html
+  String ngramsPrefix = @"googlebooks-eng-1M-1gram-20090715-";
+
+  string destFile = @"frequency_dictionary_en_US_60size_1M_1gram_20090715.txt";
+
+  Console.WriteLine("Creating aspell frequency dictionary");
   DictionaryFactory df = new DictionaryFactory();
-  df.CreateWordFrequencyDictionary(@"scowl-60size-0var-en_US.txt", @"googlebooks-eng-1M-1gram-20090715-", @"frequency_dictionary_en_US_60size_1M_1gram_20090715_censored.txt");
+  df.CreateWordFrequencyDictionary(aspellScowlFilepath, ngramsPrefix, destFile);
  }
 }
 
@@ -22,11 +32,6 @@ class DictionaryFactory {
 
  //create a word frequency dictionary
  public void CreateWordFrequencyDictionary(string scowlFilename, string googleBooksPrefix, string outputFilename) {
-
-  //spelling dictionary
-  //http://app.aspell.net/create?defaults=en_US
-  //http://wordlist.aspell.net/
-
   HashSet < string > hs = new HashSet < string > ();
   using(StreamReader sr = new StreamReader(scowlFilename)) {
    String line;
@@ -59,11 +64,9 @@ class DictionaryFactory {
    "fori"
   };
 
-  // Dictionaries are crazy.  Let's try and censor some of it for a chatbot. (Note: you'll never win)
-  string[] badWords = File.ReadAllLines (@"bad-words.txt");
+  // Dictionaries can have crazy UX effects.  You can provide some bad words to censor for a chatbot. (Note: you'll never win)
+  // string[] badWords = File.ReadAllLines (@"bad-words.txt");
 
-  //### process google ngrams
-  //http://storage.googleapis.com/books/ngrams/books/datasetsv2.html
   for (int i = 0; i < 10; i++) {
    using(StreamReader sr = new StreamReader(googleBooksPrefix + i.ToString() + ".csv")) {
     String line;
@@ -77,7 +80,6 @@ class DictionaryFactory {
       //allow only terms from the google n-grams which are also in the SCOWL lis
       if (!hs.Contains(key))
        continue;
-
 
       //allow only terms which start with a letter
       if (!Char.IsLetter(key.First()))
@@ -96,8 +98,7 @@ class DictionaryFactory {
        continue;
 
       // UNCOMMENT to remove bad words
-      if (badWords.Contains(key))
-       continue;
+      // if (badWords.Contains(key)) continue;
 
       //set word counts
       Int64 count;
@@ -151,6 +152,6 @@ class DictionaryFactory {
     file.WriteLine(termlist2[i].Key + " " + termlist2[i].Value.ToString());
   }
 
-  Console.WriteLine("ready: " + termlist.Count.ToString("N0") + " terms");
+  Console.WriteLine("Ready: " + termlist.Count.ToString("N0") + " terms");
  }
 }
