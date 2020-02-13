@@ -1,6 +1,6 @@
 {
   "name": "spellchecker-wasm",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "repository": "https://github.com/justinwilaby/spellchecker-wasm",
   "description": "An extremely fast multi-thread capable Spellchecker written in Rust compiled to WebAssembly for Node.",
   "main": "lib/nodejs/index.js",
