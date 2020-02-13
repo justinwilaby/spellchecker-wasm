@@ -48,7 +48,7 @@ export interface CheckSpellingOptions {
 export type ResultsHandler = (suggestedItems: SuggestedItem[]) => void;
 
 export const defaultOptions: SymSpellOptions = {
-    dictionaryEditDistance: 7,
+    dictionaryEditDistance: 2,
     countThreshold: 1
 };
 

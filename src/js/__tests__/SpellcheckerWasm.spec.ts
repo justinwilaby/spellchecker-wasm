@@ -78,5 +78,33 @@ describe('SpellcheckerWasm', function() {
         spellchecker.writeToDictionary(Buffer.from('asdf 10000\n'));
         spellchecker.checkSpelling('asdf');
         equal(lastResults.length, 0);
-    })
+    });
+
+    it('should perform lookups on words containing accented chars', async () => {
+        let lastResults;
+        const resultsHandler = results => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation);
+        spellchecker.checkSpelling('crèche');
+        deepEqual(lastResults[0].toJSON(), {"count":19317,"distance":1,"term":"creche"});
+    });
+
+    it('should perform lookups using custom lookup options', async () => {
+        let lastResults;
+        const resultsHandler = results => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, null, {countThreshold: 2, dictionaryEditDistance: 7});
+        spellchecker.checkSpelling('cofvfee', {
+            includeUnknown: false,
+            maxEditDistance: 4,
+            verbosity: 1
+        });
+        deepEqual(lastResults[0].toJSON(), {"count": 4208682, "distance": 1, "term": "coffee"});
+    });
 });

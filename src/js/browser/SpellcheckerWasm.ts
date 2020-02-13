@@ -57,7 +57,7 @@ export class SpellcheckerWasm extends SpellcheckerBase {
         const {symspell, write_to_dictionary, lookup, lookup_compound, memory} = result.instance.exports as WasmSymSpell;
         this.wasmSymSpell = {symspell, write_to_dictionary, lookup, lookup_compound, memory};
 
-        symspell(2, 7);
+        symspell(options.dictionaryEditDistance, options.countThreshold);
         const newline = new Uint8Array([10]);
 
         const readStreamIntoDictionary = async (reader: ReadableStreamDefaultReader, isBigram: boolean) => {
