@@ -485,13 +485,14 @@ impl SymSpell {
                     continue;
                 }
                 let len = candidate.len();
-                for (_, range) in candidate_gc {
+                for (s, range) in candidate_gc {
                     let mut slice: Vec<u8> = Vec::new();
+                    let s_len = s.len();
                     if range.start != 0 {
-                        slice.extend_from_slice(candidate[..range.start].as_bytes());
+                        slice.extend_from_slice(candidate[..range.end - s_len].as_bytes());
                     }
-                    if range.start + 1 != len {
-                        slice.extend_from_slice(candidate[range.start + 1..].as_bytes());
+                    if range.end != len {
+                        slice.extend_from_slice(candidate[range.start + s_len..].as_bytes());
                     }
                     let delete = unsafe { String::from_utf8_unchecked(slice) };
                     if deletes_considered.insert(delete.clone()) {

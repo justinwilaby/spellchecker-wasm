@@ -6,6 +6,7 @@ const commonMisspellings: { correctSpelling: string, misspellings: string[] }[] 
 const wasmPath = resolve(__dirname, '../../../lib/spellchecker-wasm.wasm');
 const dictionaryLocation = resolve(__dirname, './frequency_dictionary_en_82_765.txt');
 const bigramLocation = resolve(__dirname, './frequency_bigramdictionary_en_243_342.txt');
+const russianDictionaryLocation = resolve(__dirname, './small_dictionary_ru.txt');
 
 describe('SpellcheckerWasm', function() {
     this.timeout(15000);
@@ -106,5 +107,17 @@ describe('SpellcheckerWasm', function() {
             verbosity: 1
         });
         deepEqual(lastResults[0].toJSON(), {"count": 4208682, "distance": 1, "term": "coffee"});
+    });
+
+    xit('should support dictionaries in other languages with UTF-8 characters', async () => {
+        let lastResults;
+        const resultsHandler = results => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, russianDictionaryLocation);
+        spellchecker.checkSpelling('свойй');
+        deepEqual(lastResults[0].toJSON(), {"count": 286780, "distance": 1, "term": "свой"});
     });
 });
