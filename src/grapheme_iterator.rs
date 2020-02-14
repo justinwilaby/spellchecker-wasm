@@ -117,7 +117,7 @@ mod grapheme_iterator_tests {
     fn iterator_test2() {
         let s = "🚀rocket ";
         let it: Vec<_> = GraphemeClusters::new(s).collect();
-        for (grapheme, range) in it {
+        for (grapheme, _) in it {
             assert_eq!(grapheme.len() > 0, true)
         }
     }
