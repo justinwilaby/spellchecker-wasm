@@ -3,10 +3,12 @@ import {resolve} from 'path';
 import expect from 'expect.js';
 import testMap from './language_tests_map.json';
 
+const wasmPath = resolve(__dirname, '../../../lib/spellchecker-wasm.wasm');
+const russianDictionaryLocation = resolve(__dirname, `./small_dictionary_ru.txt`);
+
 for (const region in testMap) {
     const regionConfig = testMap[region];
     const commonMisspellings: { correctSpelling: string, misspellings: string[] }[] = require(`./commonMisspellings${regionConfig.filesuffix}.json`);
-    const wasmPath = resolve(__dirname, '../../../lib/spellchecker-wasm.wasm');
     const dictionaryLocation = resolve(__dirname, `../../../lib/frequency_dictionary${regionConfig.filesuffix}.txt`);
     const bigramLocation = resolve(__dirname, '../../../lib/frequency_bigramdictionary_en_243_342.txt');
 
@@ -96,5 +98,36 @@ for (const region in testMap) {
             expect(lastResults[0].toJSON()).to.eql(regionConfig.verifyAccentedCharResponse)
 
         });
+
+        it('should perform lookups using custom lookup options', async () => {
+            let lastResults;
+            const resultsHandler = results => {
+                lastResults = results;
+            };
+            const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+            await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, null, {countThreshold: 2, dictionaryEditDistance: 7});
+            spellchecker.checkSpelling('cofvfee', {
+                includeUnknown: false,
+                maxEditDistance: 4,
+                verbosity: 1
+            });
+            expect(lastResults[0].toJSON()).to.eql({"count": 4208682, "distance": 1, "term": "coffee"});
+        });
+
     });
 }
+
+describe(`SpellcheckerWasm - Russian`, function() {
+    it('should support dictionaries in other languages with UTF-8 characters', async () => {
+        let lastResults;
+        const resultsHandler = results => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, russianDictionaryLocation);
+        spellchecker.checkSpelling('свойй');
+        expect(lastResults[0].toJSON()).to.eql({"count": 28678, "distance": 1, "term": "свой"});
+    });
+});

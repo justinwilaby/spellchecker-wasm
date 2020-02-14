@@ -37,7 +37,7 @@ mod tests {
         writer(BufReader::new(dictionary_file), false)?;
         writer(BufReader::new(bigram_file), true)?;
 
-        let result = sym_spell.lookup_compound("begining sentances with mispelled words is outragous and mischievious", MAX_EDIT_DISTANCE);
+        let _result = sym_spell.lookup_compound("begining sentances with mispelled words is outragous and mischievious", MAX_EDIT_DISTANCE);
 
         Ok(())
     }
