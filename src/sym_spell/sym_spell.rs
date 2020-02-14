@@ -240,21 +240,22 @@ impl SymSpell {
         }
     }
 
-    fn create_deletes(&mut self, mut key: &str) -> HashSet<String> {
+    fn create_deletes(&mut self, mut delete: &str) -> HashSet<String> {
         let mut set: HashSet<String> = HashSet::new();
-        let gc = GraphemeClusters::new(key);
+        let gc = GraphemeClusters::new(delete);
         let key_len = gc.len();
+        let key = delete.clone();
         if key_len <= self.dictionary_edit_distance {
             set.insert(String::new());
         }
         if key_len > self.prefix_length {
             let slice_range = gc.get_slice_range(0..self.prefix_length);
-            key = &key[slice_range];
+            delete = &delete[slice_range];
         }
-        set.insert(String::from(key));
-        self.insert_delete(key, key);
+        set.insert(String::from(delete));
+        self.insert_delete(delete, key);
 
-        self.edits(key, 0, &mut set);
+        self.edits(delete, 0, &mut set);
 
         set
     }

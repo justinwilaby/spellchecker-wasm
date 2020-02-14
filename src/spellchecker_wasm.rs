@@ -43,9 +43,9 @@ pub unsafe extern fn write_to_dictionary(ptr: *const u8, length: usize, is_bigra
 }
 
 #[no_mangle]
-pub unsafe extern fn lookup(ptr: *mut u8, length: usize, verbosity: Verbosity, max_edit_distance: usize, include_unknown: bool) {
+pub unsafe extern fn lookup(ptr: *mut u8, length: usize, verbosity: Verbosity, max_edit_distance: usize, include_unknown: bool, include_self: bool) {
     let bytes = slice::from_raw_parts(ptr, length);
-    let results = (*SYM).lookup(str::from_utf8_unchecked(bytes), verbosity, max_edit_distance, include_unknown, false);
+    let results = (*SYM).lookup(str::from_utf8_unchecked(bytes), verbosity, max_edit_distance, include_unknown, include_self);
 
     emit_results(results)
 }

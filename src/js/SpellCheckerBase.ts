@@ -6,7 +6,7 @@ export interface WasmSymSpell extends WebAssembly.Exports {
     // Exported wasm functions
     symspell: (dictionaryEditDistance: number, countThreshold: number) => void;
 
-    lookup: (ptr: number, length: number, verbosity: Verbosity, maxEditDistance: number, includeUnknowns: boolean) => void;
+    lookup: (ptr: number, length: number, verbosity: Verbosity, maxEditDistance: number, includeUnknowns: boolean, includeSelf: boolean) => void;
 
     lookup_compound: (ptr: number, length: number, maxEditDistance: number) => void;
 
@@ -42,7 +42,14 @@ export interface SymSpellOptions {
 export interface CheckSpellingOptions {
     verbosity: Verbosity,
     maxEditDistance: number,
-    includeUnknown: boolean
+    // when true, input terms not contained in the dictionary,
+    // and with no suggestions in the dictionary within the
+    // maximum edit distance will be still included in the output
+    includeUnknown: boolean,
+    // when true, and Verbosity is not set to All,
+    // include the input word in the suggestions when an
+    // exact match is found in the dictionary.
+    includeSelf: boolean
 }
 
 export type ResultsHandler = (suggestedItems: SuggestedItem[]) => void;
@@ -54,6 +61,7 @@ export const defaultOptions: SymSpellOptions = {
 
 export const defaultCheckSpellingOptions: CheckSpellingOptions = {
     includeUnknown: false,
+    includeSelf: false,
     maxEditDistance: 2,
     verbosity: Verbosity.Closest
 };
@@ -129,7 +137,7 @@ export abstract class SpellcheckerBase {
             encodedString = this.encodeString(word);
         }
         this.writeToBuffer(encodedString, memory);
-        lookup(0, encodedString.byteLength, options.verbosity, options.maxEditDistance, options.includeUnknown);
+        lookup(0, encodedString.byteLength, options.verbosity, options.maxEditDistance, options.includeUnknown, options.includeSelf);
     }
 
     /**

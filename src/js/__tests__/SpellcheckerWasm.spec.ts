@@ -104,9 +104,18 @@ describe('SpellcheckerWasm', function() {
         spellchecker.checkSpelling('cofvfee', {
             includeUnknown: false,
             maxEditDistance: 4,
-            verbosity: 1
+            verbosity: 1,
+            includeSelf: false
         });
         deepEqual(lastResults[0].toJSON(), {"count": 4208682, "distance": 1, "term": "coffee"});
+
+        spellchecker.checkSpelling('eradicate', {
+            includeUnknown: false,
+            maxEditDistance: 4,
+            verbosity: 1,
+            includeSelf: true
+        });
+        deepEqual(lastResults[0].toJSON(), {"count": 85274, "distance": 0, "term": "eradicate"});
     });
 
     it('should support dictionaries in other languages with UTF-8 characters', async () => {

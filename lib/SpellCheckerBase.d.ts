@@ -2,7 +2,7 @@ import { SuggestedItem } from "./SuggestedItem";
 export interface WasmSymSpell extends WebAssembly.Exports {
     memory: WebAssembly.Memory;
     symspell: (dictionaryEditDistance: number, countThreshold: number) => void;
-    lookup: (ptr: number, length: number, verbosity: Verbosity, maxEditDistance: number, includeUnknowns: boolean) => void;
+    lookup: (ptr: number, length: number, verbosity: Verbosity, maxEditDistance: number, includeUnknowns: boolean, includeSelf: boolean) => void;
     lookup_compound: (ptr: number, length: number, maxEditDistance: number) => void;
     write_to_dictionary: (prt: number, length: number, isBigram: boolean) => void;
 }
@@ -28,6 +28,7 @@ export interface CheckSpellingOptions {
     verbosity: Verbosity;
     maxEditDistance: number;
     includeUnknown: boolean;
+    includeSelf: boolean;
 }
 export declare type ResultsHandler = (suggestedItems: SuggestedItem[]) => void;
 export declare const defaultOptions: SymSpellOptions;
