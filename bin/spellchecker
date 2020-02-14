@@ -78,6 +78,6 @@ port1.addListener('message', (data) => {
 process.stdin.on('data', data => {
     port1.postMessage({
         word: '' + data,
-        opts: _defaultCheckSpellingOptions,
+        options: _defaultCheckSpellingOptions,
     });
 });
