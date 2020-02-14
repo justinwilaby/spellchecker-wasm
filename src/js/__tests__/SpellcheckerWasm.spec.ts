@@ -109,7 +109,7 @@ describe('SpellcheckerWasm', function() {
         deepEqual(lastResults[0].toJSON(), {"count": 4208682, "distance": 1, "term": "coffee"});
     });
 
-    xit('should support dictionaries in other languages with UTF-8 characters', async () => {
+    it('should support dictionaries in other languages with UTF-8 characters', async () => {
         let lastResults;
         const resultsHandler = results => {
             lastResults = results;
@@ -118,6 +118,6 @@ describe('SpellcheckerWasm', function() {
 
         await spellchecker.prepareSpellchecker(wasmPath, russianDictionaryLocation);
         spellchecker.checkSpelling('свойй');
-        deepEqual(lastResults[0].toJSON(), {"count": 286780, "distance": 1, "term": "свой"});
+        deepEqual(lastResults[0].toJSON(), {"count": 28678, "distance": 1, "term": "свой"});
     });
 });

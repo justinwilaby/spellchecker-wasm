@@ -167,9 +167,11 @@ impl SymSpell {
     pub fn write_line_to_dictionary(&mut self, line: &str, separator: &str) {
         let mut parts = vec![];
         let mut idx = 0;
-        for i in 0..line.len() {
-            let ch = &line[i..i + 1];
-            if ch == separator {
+        let line_bytes = line.as_bytes();
+        let separator_bytes = separator.as_bytes();
+        for i in 0..line_bytes.len() {
+            let ch = &line_bytes[i..i + 1];
+            if ch == separator_bytes {
                 parts.push(&line[idx..i]);
                 idx = i + 1;
             }
@@ -218,13 +220,14 @@ impl SymSpell {
         }
         edit_distance += 1;
         let iter = GraphemeClusters::new(subject);
-        for (_, range) in iter {
+        for (s, range) in iter {
             let mut slice: Vec<u8> = Vec::new();
+            let s_len = s.len();
             if range.start != 0 {
-                slice.extend_from_slice(subject[..range.start].as_bytes());
+                slice.extend_from_slice(subject[..range.end - s_len].as_bytes());
             }
-            if range.start + 1 != len {
-                slice.extend_from_slice(subject[range.start + 1..].as_bytes());
+            if range.end != len {
+                slice.extend_from_slice(subject[range.start + s_len..].as_bytes());
             }
             let delete = unsafe { String::from_utf8_unchecked(slice) };
             if !delete_words.contains(&delete) {
