@@ -33,7 +33,7 @@ for (const region in testMap) {
                     let [s, n] = process.hrtime(t);
                     lookupTimes.push((s * 1000) + n / 1000 / 1000);
                     const terms = lastResults.map(result => result.term);
-                    // console.log("Checked:", word, "\n  Spellcheck suggestions:", terms, "\n  Correct spelling:", correctSpelling, "\n  Common Mispellings:", misspellings);
+                    // console.log('Checked:', word, '\n  Spellcheck suggestions:', terms, '\n  Correct spelling:', correctSpelling, '\n  Common Mispellings:', misspellings);
                     expect(terms.indexOf(correctSpelling.toLowerCase())).to.not.equal(-1);
                 })
             });
@@ -56,7 +56,7 @@ for (const region in testMap) {
             spellchecker.checkSpellingCompound('begining sentances with misspeled words is outragous and mischievious');
             [s, n] = process.hrtime(t);
             process.stdout.write(`compound lookup time: ${(s * 1000) + n / 1000 / 1000} ms\n`);
-            expect(lastResults[0].toJSON()).to.eql({"count": 0,"distance": 5,"term": "beginning sentences with misspelled words is outrageous and mischievous"})
+            expect(lastResults[0].toJSON()).to.eql({'count': 0,'distance': 5,'term': 'beginning sentences with misspelled words is outrageous and mischievous'})
         });
 
         it('should provide SuggestedItems that serialize to JSON properly', async () => {
@@ -112,13 +112,13 @@ for (const region in testMap) {
                 maxEditDistance: 4,
                 verbosity: 1
             });
-            expect(lastResults[0].toJSON()).to.eql({"count": 4208682, "distance": 1, "term": "coffee"});
+            expect(lastResults[0].toJSON()).to.eql(regionConfig.customLookupResponse);
         });
 
     });
 }
 
-describe(`SpellcheckerWasm - Russian`, function() {
+describe('SpellcheckerWasm - Multi-byte UTF-8', function() {
     it('should support dictionaries in other languages with UTF-8 characters', async () => {
         let lastResults;
         const resultsHandler = results => {
@@ -128,6 +128,6 @@ describe(`SpellcheckerWasm - Russian`, function() {
 
         await spellchecker.prepareSpellchecker(wasmPath, russianDictionaryLocation);
         spellchecker.checkSpelling('свойй');
-        expect(lastResults[0].toJSON()).to.eql({"count": 28678, "distance": 1, "term": "свой"});
+        expect(lastResults[0].toJSON()).to.eql({'count': 28678, 'distance': 1, 'term': 'свой'});
     });
 });

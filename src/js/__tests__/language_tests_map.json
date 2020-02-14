@@ -11,6 +11,11 @@
       "count": 19317,
       "distance": 1,
       "term": "creche"
+    },
+    "customLookupResponse": {
+      "count": 4208682,
+      "distance": 1,
+      "term": "coffee"
     }
   },
   "en_US": {
@@ -25,6 +30,11 @@
       "count": 1709,
       "distance": 1,
       "term": "creche"
+    },
+    "customLookupResponse": {
+      "count": 279183,
+      "distance": 1,
+      "term": "coffee"
     }
   }
 }
