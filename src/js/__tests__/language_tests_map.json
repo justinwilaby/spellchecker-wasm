@@ -1,0 +1,30 @@
+{
+  "en_GB": {
+    "filesuffix": "_en_82_765",
+    "verifyJsonSerializationResponse": {
+      "count": 2733276,
+      "distance": 2,
+      "term": "achieve"
+    },
+    "writeCustomWordsResultLength": 49,
+    "verifyAccentedCharResponse": {
+      "count": 19317,
+      "distance": 1,
+      "term": "creche"
+    }
+  },
+  "en_US": {
+    "filesuffix": "_en_US_60size_1M_1gram_20090715",
+    "verifyJsonSerializationResponse": {
+      "count": 337517,
+      "distance": 2,
+      "term": "achieved"
+    },
+    "writeCustomWordsResultLength": 37,
+    "verifyAccentedCharResponse": {
+      "count": 1709,
+      "distance": 1,
+      "term": "creche"
+    }
+  }
+}
