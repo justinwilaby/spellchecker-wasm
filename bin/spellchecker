@@ -1,17 +1,68 @@
 #!/usr/bin/env node
+const yargs = require('yargs');
 const { resolve }  = require('path');
 const { Worker, MessageChannel }  = require('worker_threads');
 const { deserializeSuggestedItems }  = require('../lib/utils');
-
+const { defaultOptions, defaultCheckSpellingOptions } = require('../lib/SpellCheckerBase.js');
 const { port1, port2 } = new MessageChannel();
 
 const worker = new Worker(resolve(__dirname, '../lib/SpellcheckerWorker.js'));
+
+let args = yargs.usage('Usage: $0 <opts>')
+    .option('dictionaryEditDistance', {
+        alias: 'd',
+        type: 'number',
+        nargs: 1,
+        description: 'the maximum edit distance for dictionary precalculations',
+        requiresArg: true,
+    })
+    .option('countThreshold', {
+        alias: 'c',
+        type: 'number',
+        nargs: 1,
+        description: 'the minimum frequency count for dictionary words to be considered correct spellings',
+        requiresArg: true,
+    })
+    .option('includeUnknown', {
+        alias: 'i',
+        type: 'boolean',
+        nargs: 1,
+        description: 'include input word in suggestions if no words within edit distance are found',
+        requiresArg: true,
+    })
+    .option('maxEditDistance', {
+        alias: 'm',
+        type: 'number',
+        nargs: 1,
+        description: 'maximum edit distance when performing lookups',
+        requiresArg: true,
+    })
+    .option('verbosity', {
+        alias: 'v',
+        type: 'number',
+        nargs: 1,
+        description: 'the closeness or quantity of returned spelling suggestions (0: Top, 1: Closest, 2: All)',
+        requiresArg: true,
+    })
+    .argv;
+
+// Updates obj1 with values from obj2 for only those keys that are both in obj1 and obj2
+let populateFromArgs = (obj1, obj2) => {
+    for(let key in obj1) {
+        if(obj2.hasOwnProperty(key)) {
+            obj1[key] = obj2[key];
+        }
+    }
+    return obj1;
+};
+let _defaultOptions = populateFromArgs({...defaultOptions}, args);
+let _defaultCheckSpellingOptions = populateFromArgs({...defaultCheckSpellingOptions}, args);
 
 worker.once("online", () => {
     const wasmPath = resolve(__dirname, '../lib/spellchecker-wasm.wasm');
     const dictionaryLocation = resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt');
     const bigramLocation = resolve(__dirname, '../lib/frequency_bigramdictionary_en_243_342.txt');
-    worker.postMessage([port2, wasmPath, dictionaryLocation, bigramLocation], [port2]);
+    worker.postMessage([port2, wasmPath, dictionaryLocation, bigramLocation, JSON.stringify(_defaultOptions)], [port2]);
 });
 
 port1.addListener('message', (data) => {
@@ -25,5 +76,8 @@ port1.addListener('message', (data) => {
 });
 
 process.stdin.on('data', data => {
-    port1.postMessage('' + data);
+    port1.postMessage({
+        word: '' + data,
+        options: _defaultCheckSpellingOptions,
+    });
 });

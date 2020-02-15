@@ -52,6 +52,26 @@ describe('The SpellcheckerWorker', function() {
         port1.postMessage('parliment collaegues preceed publicaly with disasterous drunkeness');
         const results = await resultsPromise;
         equal(results[0].term, 'parliament colleagues proceed publicly with disastrous drunkenness');
+    });
 
-    })
+    it('should support passing configuration options to the spellchecker', async () => {
+        const resultsPromise: Promise<SuggestedItem[]> = new Promise(resolve => {
+            port1.addListener('message', data => {
+                resolve(deserializeSuggestedItems(data, 0, data.length));
+            });
+        });
+
+        port1.postMessage({
+            word: 'preposterous',
+            options: {
+                includeUnknown: true,
+                maxEditDistance: 2,
+                verbosity: 1,
+            }
+        });
+        const results = await resultsPromise;
+        equal(results[0].term, 'preposterous');
+        equal(results.length, 1);
+    });
+
 });
