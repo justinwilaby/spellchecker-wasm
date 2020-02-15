@@ -98,7 +98,7 @@ for (const region in testMap) {
             expect(lastResults[0].toJSON()).to.eql(regionConfig.verifyAccentedCharResponse)
 
         });
-
+      
         it('should perform lookups using custom lookup options', async () => {
             let lastResults;
             const resultsHandler = results => {
@@ -110,12 +110,19 @@ for (const region in testMap) {
             spellchecker.checkSpelling('cofvfee', {
                 includeUnknown: false,
                 maxEditDistance: 4,
-                verbosity: 1
+                verbosity: 1,
+                includeSelf: false
             });
-            expect(lastResults[0].toJSON()).to.eql(regionConfig.customLookupResponse);
-        });
+            deepEqual(lastResults[0].toJSON(), {"count": 4208682, "distance": 1, "term": "coffee"});
 
-    });
+            spellchecker.checkSpelling('eradicate', {
+                includeUnknown: false,
+                maxEditDistance: 4,
+                verbosity: 1,
+                includeSelf: true
+            });
+            deepEqual(lastResults[0].toJSON(), {"count": 85274, "distance": 0, "term": "eradicate"});
+        });
 }
 
 describe('SpellcheckerWasm - Multi-byte UTF-8', function() {
