@@ -1,6 +1,11 @@
 import {MessagePort, parentPort} from 'worker_threads';
 import {SpellcheckerWasm} from './SpellcheckerWasm';
 
+interface Message {
+    word: string;
+    options: object;
+}
+
 /**
  * The SpellcheckerWorker class extends SpellcheckWasm
  * to provide the logic for preparing the wasm,
@@ -32,13 +37,13 @@ class SpellcheckerWorker extends SpellcheckerWasm {
         this.port2.postMessage(slice);
     };
 
-    private initializationMessage = async (value: [MessagePort, string, string, string]): Promise<void> => {
-        const [port2, wasmPath, dictionaryPath, bigramLocation] = value;
-
+    private initializationMessage = async (value: [MessagePort, string, string, string, string]): Promise<void> => {
+        const [port2, wasmPath, dictionaryPath, bigramLocation, defaultOptionsStr] = value;
+        let defaultOptions = JSON.parse(defaultOptionsStr || "{}");
         this.port2 = port2;
         this.port2.addListener('message', this.inboundMessageHandler);
         try {
-            await this.prepareSpellchecker(wasmPath, dictionaryPath, bigramLocation);
+            await this.prepareSpellchecker(wasmPath, dictionaryPath, bigramLocation, defaultOptions);
         } catch (e) {
             this.port2.postMessage(`Error: ${e.message}`);
         }
@@ -46,12 +51,22 @@ class SpellcheckerWorker extends SpellcheckerWasm {
         this.port2.postMessage('ready');
     };
 
-    private inboundMessageHandler = (word: string): void => {
+    private inboundMessageHandler = (message: string | Message): void => {
+        let word;
+        let options;
+        if(typeof message === "string") {
+            word = message;
+        }
+        else {// cli always passes an object for configurable options
+            word = message.word;
+            options = message.options;
+        }
         const trimmed = word.trim();
+
         if (trimmed.includes(' ')) {
-            this.checkSpellingCompound(trimmed);
+            this.checkSpellingCompound(trimmed, options);
         } else {
-            this.checkSpelling(trimmed);
+            this.checkSpelling(trimmed, options);
         }
     };
 }
