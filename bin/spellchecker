@@ -24,7 +24,14 @@ let args = yargs.usage('Usage: $0 <opts>')
         requiresArg: true,
     })
     .option('includeUnknown', {
-        alias: 'i',
+        alias: 'u',
+        type: 'boolean',
+        nargs: 1,
+        description: 'include input terms that are not in the dictionary and have no words within edit distance',
+        requiresArg: true,
+    })
+    .option('includeSelf', {
+        alias: 's',
         type: 'boolean',
         nargs: 1,
         description: 'include input word in suggestions if no words within edit distance are found',
