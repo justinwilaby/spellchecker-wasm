@@ -16,6 +16,11 @@
       "count": 4208682,
       "distance": 1,
       "term": "coffee"
+    },
+    "correctTermResponse": {
+      "count": 85274,
+      "distance": 0,
+      "term": "eradicate"
     }
   },
   "en_US": {
@@ -35,6 +40,11 @@
       "count": 279183,
       "distance": 1,
       "term": "coffee"
+    },
+    "correctTermResponse": {
+      "count": 17305,
+      "distance": 0,
+      "term": "eradicate"
     }
   }
 }

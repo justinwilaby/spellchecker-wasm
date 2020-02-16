@@ -98,7 +98,7 @@ for (const region in testMap) {
             expect(lastResults[0].toJSON()).to.eql(regionConfig.verifyAccentedCharResponse)
 
         });
-      
+
         it('should perform lookups using custom lookup options', async () => {
             let lastResults;
             const resultsHandler = results => {
@@ -113,16 +113,26 @@ for (const region in testMap) {
                 verbosity: 1,
                 includeSelf: false
             });
-            deepEqual(lastResults[0].toJSON(), {"count": 4208682, "distance": 1, "term": "coffee"});
+            expect(lastResults[0].toJSON()).to.eql(regionConfig.customLookupResponse);
+        });
 
+        it('should return self for correct terms', async () => {
+            let lastResults;
+            const resultsHandler = results => {
+                lastResults = results;
+            };
+            const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+            await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, null, {countThreshold: 2, dictionaryEditDistance: 7});
             spellchecker.checkSpelling('eradicate', {
                 includeUnknown: false,
                 maxEditDistance: 4,
                 verbosity: 1,
                 includeSelf: true
             });
-            deepEqual(lastResults[0].toJSON(), {"count": 85274, "distance": 0, "term": "eradicate"});
+            expect(lastResults[0].toJSON()).to.eql(regionConfig.correctTermResponse);
         });
+    });
 }
 
 describe('SpellcheckerWasm - Multi-byte UTF-8', function() {
