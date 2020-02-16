@@ -30,7 +30,7 @@ npm i -s spellchecker-wasm
 ```bash
 npm i -g spellchecker-wasm
 ```
-Then use `spellcheck` to enter interactive mode
+Then use `spellcheck` to enter interactive mode. For supported arguments, run `spellcheck --help`.
 
 ## Usage in Electron
 ```js
@@ -162,6 +162,96 @@ initializeSpellchecker().then(spellchecker => {
     spellchecker.checkSpellingCompound('tiss cheks th entir sentance');
 });
 ```
+## Common use cases
+### Differentiating between a correct word and a word with no suggestions
+By default, the spellchecker will return no results for both 'there' and 'thereeeee'. 
+The former is correct and so will not produce suggestions. The latter word is obviously a mistake, 
+but its distance from any word in the dictionary is greater than the maxEditDistance.
+
+To distinguish between the two, one can use the `includeUnknown` option :
+```js
+let lastResults;
+const resultsHandler = results => {
+    lastResults = results;
+};
+
+spellchecker.checkSpelling('there');
+// lastResults.length === 0
+
+spellchecker.checkSpelling('thereeeee');
+// lastResults.length === 0
+
+spellchecker.checkSpelling('thereeeee', {
+    includeUnknown: true,
+    maxEditDistance: 2,
+    verbosity: 2,
+    includeSelf: false
+});
+// lastResults.length === 1
+```
+### Allowing for deeper word searches
+Given that the default `maxEditDistance`, which controls up to which edit distance words from the dictionary should be treated as suggestions, is 2, words such as `cofvvvfee` will not return suggestions.
+
+This can be remedied as follows:
+```js
+let lastResults;
+const resultsHandler = results => {
+    lastResults = results;
+};
+
+spellchecker.checkSpelling('cofvvvfee');
+// lastResults.length === 0
+
+spellchecker.checkSpelling('cofvvvfee', {
+    includeUnknown: false,
+    maxEditDistance: 4,
+    verbosity: 1,
+    includeSelf: false
+});
+// lastResults.length === 1, lastResults[0] --> 'coffee'
+```
+*Caveat* : the `maxEditDistance` parameter that is passed to `checkSpelling` must be less-than-or-equal to the `dictionaryEditDistance` parameter of `prepareSpellchecker`. E.g. : 
+```js
+// BAD!
+await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation); // Default value of dictionaryEditDistance is 2
+let lastResults;
+const resultsHandler = results => {
+    lastResults = results;
+};
+spellchecker.checkSpelling('cofvvvfee', {
+    includeUnknown: false,
+    maxEditDistance: 4,
+    verbosity: 1,
+    includeSelf: false
+});
+// ERROR!
+```
+
+```js
+// Good
+await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, null, {countThreshold: 2, dictionaryEditDistance: 4});
+let lastResults;
+const resultsHandler = results => {
+    lastResults = results;
+};
+spellchecker.checkSpelling('cofvvvfee', {
+    includeUnknown: false,
+    maxEditDistance: 4,
+    verbosity: 1,
+    includeSelf: false
+});
+// lastResults.length === 1
+```
+### Controlling the amount and ordering of returned suggestions
+The `verbosity` parameter to `checkSpelling` can be used to tweak the amount of suggestions returned. Its supported values are :
+```js
+verbosity:
+    0: (top) returns only the suggestion with the highest term frequency of the suggestions of smallest edit distance found,
+    1: (closest) returns all suggestions of smallest edit distance found, suggestions ordered by term frequency,
+    2: (all) returns all suggestions within maxEditDistance, suggestions ordered by edit distance, then by term frequency,
+
+```
+
 ## Building from source
 ### Prerequisites
 

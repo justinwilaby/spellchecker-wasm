@@ -62,16 +62,17 @@ describe('The SpellcheckerWorker', function() {
         });
 
         port1.postMessage({
-            word: 'preposterous',
+            word: 'thereeeeeeeee',
             options: {
+                includeSelf: false,
                 includeUnknown: true,
                 maxEditDistance: 2,
-                verbosity: 1,
+                verbosity: 2,
             }
         });
         const results = await resultsPromise;
-        equal(results[0].term, 'preposterous');
         equal(results.length, 1);
+        equal(results[0].term, 'thereeeeeeeee');
     });
 
 });
