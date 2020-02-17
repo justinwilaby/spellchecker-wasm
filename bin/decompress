@@ -2,23 +2,20 @@ const fs = require('fs');
 const zlib = require('zlib');
 const path = require('path');
 
-const bigramLocation = path.resolve(__dirname, '../lib/frequency_bigramdictionary_en_243_342.txt.gz');
-const dictionaryLocation = path.resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt.gz');
+const filenames = [
+    "frequency_bigramdictionary_en_243_342.txt",
+    "frequency_dictionary_en_82_765.txt",
+    "frequency_dictionary_en_US_60size_1M_1gram_20090715.txt"
+].map((filepath) => path.resolve(__dirname, "../lib/", filepath));
 
-zlib.unzip(fs.readFileSync(bigramLocation), (error, data) => {
-    if (error) {
-        process.stderr.write(`Failed to decompress ${error.message}`);
-        return;
-    }
-    fs.writeFileSync(path.resolve(__dirname, '../lib/frequency_bigramdictionary_en_243_342.txt'), data);
-    fs.unlinkSync(bigramLocation);
-});
-
-zlib.unzip(fs.readFileSync(dictionaryLocation), (error, data) => {
-    if (error) {
-        process.stderr.write(`Failed to decompress ${error.message}`);
-        return;
-    }
-    fs.writeFileSync(path.resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt'), data);
-    fs.unlinkSync(dictionaryLocation);
+filenames.forEach((file) => {
+    const compressedFile = `${file}.gz`
+    zlib.unzip(fs.readFileSync(compressedFile), (error, data) => {
+        if (error) {
+            process.stderr.write(`Failed to decompress ${error.message}`);
+            return;
+        }
+        fs.writeFileSync(path.resolve(__dirname, file), data);
+        fs.unlinkSync(compressedFile);
+    });
 });

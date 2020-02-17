@@ -25,8 +25,8 @@
     describe('The SpellcheckerWasm', () => {
         it('should read from the supplied dictionary and perform lookups', async () => {
             const wasm = await fetch('../../../lib/spellchecker-wasm.wasm');
-            const dictionary = await fetch('./frequency_dictionary_en_82_765.txt');
-            const misspellings = await fetch('./commonMisspellings.json');
+            const dictionary = await fetch('../../../lib/frequency_dictionary_en_82_765.txt');
+            const misspellings = await fetch('./commonMisspellings_en_82_765.json');
             const commonMisspellings = await misspellings.json();
 
             let lastResults;
