@@ -88,57 +88,24 @@ function resultHandler(results) {
 
 ## Usage as a Node Worker
 ```typescript
-import { Worker, MessageChannel, MessagePort } from 'worker_threads';
-import { deserializeSuggestedItems } from './utils';
+const { SpellcheckerWasm } = require('../lib/nodejs/SpellcheckerWasm.js');
 
-const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
-const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
+const wasmPath = resolve(__dirname, '../lib/spellchecker-wasm.wasm');
+const dictionaryPath = resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt');
 // Optional bigram support for compound lookups - add only when needed
-const bigramLocation = require.resolve('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt');
-// Get references to the MessagePorts used for bi-directional communication
-const { port1, port2 } = new MessageChannel();
+const bigramPath = resolve(__dirname, '../lib/frequency_bigramdictionary_en_243_342.txt');
 
-async function prepareWorker(): Promise<MessagePort> {
-    // Create a new worker and provide it the SpellcheckerWorker.js script
-    const worker = new Worker(require.resolve('spellchecker-wasm/lib/SpellcheckerWorker.js'));
-
-    // Wait for the worker to start executing the script
-    // then post a message to it containing the port we 
-    // want it to use for communication and the locations 
-    // of both the spellcheck-wasm.wasm and the 
-    // frequency_dictionary_en_82_765.txt.
-    worker.once("online", () => {
-        worker.postMessage([port2, wasmPath, dictionaryLocation, bigramLocation], [port2]); // bigramLocation required only for compound lookups
-    });
-
-    // Listen for messages on port1. The "ready" message indicates
-    // The worker is done loading the dictionary and the spellchecker
-    // is ready for use. If the worker failed, the first message will
-    // contain the details of the failure and the promise will reject.
-    return new Promise((resolve, reject) => {
-        port1.once('message', (data: string) => {
-            if (data === 'ready') {
-                return resolve(port1);
-            }
-            reject(data);
+let resultHandler = (results) => {process.stdout.write(results.map(r => r.term) + '\n');};
+let spellcheckerWasm = new SpellcheckerWasm(resultHandler);
+spellcheckerWasm.prepareSpellchecker(wasmPath, dictionaryPath, bigramPath)
+    .then(() => {
+        process.stdout.write('Ready\n');
+        process.stdin.on('data', data => {
+            spellcheckerWasm.checkSpelling('' + data);
         });
-    });
-}
-// When the promise resolves, the Worker is ready 
-// and the MessagePort provided must be subscribed 
-// to in order to receive suggestions.
-prepareWorker()
-    .then(messagePort => {
-        messagePort.addEventListener('message', (data: Uint8Array) => {
-            const results = deserializeSuggestedItems(data as Uint8Array, 0, data.length);
-            process.stdout.write(results.map(r => r.term));
-        });
-        ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts']
-            .forEach(word => port1.postMessage(word));
-        port1.postMessage('multaple wrds are alos acceptible')
     })
-    .catch(e => {
-        process.stdout.write('' + e);
+    .catch((e) => {
+        process.stdout.write(`Error initializing the SpellChecker\n${e}\n`);
     });
 ```
 ## Usage in the Browser
