@@ -90,14 +90,14 @@ function resultHandler(results) {
 ```typescript
 const { SpellcheckerWasm } = require('../lib/nodejs/SpellcheckerWasm.js');
 
-const wasmPath = resolve(__dirname, '../lib/spellchecker-wasm.wasm');
-const dictionaryPath = resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt');
+const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
+const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
 // Optional bigram support for compound lookups - add only when needed
-const bigramPath = resolve(__dirname, '../lib/frequency_bigramdictionary_en_243_342.txt');
+const bigramLocation = require.resolve('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt');
 
 let resultHandler = (results) => {process.stdout.write(results.map(r => r.term) + '\n');};
 let spellcheckerWasm = new SpellcheckerWasm(resultHandler);
-spellcheckerWasm.prepareSpellchecker(wasmPath, dictionaryPath, bigramPath)
+spellcheckerWasm.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation)
     .then(() => {
         process.stdout.write('Ready\n');
         process.stdin.on('data', data => {
