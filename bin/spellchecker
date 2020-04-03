@@ -1,12 +1,8 @@
 #!/usr/bin/env node
 const yargs = require('yargs');
 const { resolve }  = require('path');
-const { Worker, MessageChannel }  = require('worker_threads');
-const { deserializeSuggestedItems }  = require('../lib/utils');
+const { SpellcheckerWasm } = require('../lib/nodejs/SpellcheckerWasm.js');
 const { defaultOptions, defaultCheckSpellingOptions } = require('../lib/SpellCheckerBase.js');
-const { port1, port2 } = new MessageChannel();
-
-const worker = new Worker(resolve(__dirname, '../lib/SpellcheckerWorker.js'));
 
 let args = yargs.usage('Usage: $0 <opts>')
     .option('dictionaryEditDistance', {
@@ -62,29 +58,23 @@ let populateFromArgs = (obj1, obj2) => {
     }
     return obj1;
 };
-let _defaultOptions = populateFromArgs({...defaultOptions}, args);
-let _defaultCheckSpellingOptions = populateFromArgs({...defaultCheckSpellingOptions}, args);
 
-worker.once("online", () => {
-    const wasmPath = resolve(__dirname, '../lib/spellchecker-wasm.wasm');
-    const dictionaryLocation = resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt');
-    const bigramLocation = resolve(__dirname, '../lib/frequency_bigramdictionary_en_243_342.txt');
-    worker.postMessage([port2, wasmPath, dictionaryLocation, bigramLocation, JSON.stringify(_defaultOptions)], [port2]);
-});
+const _defaultOptions = populateFromArgs({...defaultOptions}, args);
+const _defaultCheckSpellingOptions = populateFromArgs({...defaultCheckSpellingOptions}, args);
 
-port1.addListener('message', (data) => {
-    if (data === 'ready') {
+const wasmPath = resolve(__dirname, '../lib/spellchecker-wasm.wasm');
+const dictionaryPath = resolve(__dirname, '../lib/frequency_dictionary_en_82_765.txt');
+const bigramPath = resolve(__dirname, '../lib/frequency_bigramdictionary_en_243_342.txt');
+
+let resultHandler = (results) => {process.stdout.write(results.map(r => r.term) + '\n');};
+let spellcheckerWasm = new SpellcheckerWasm(resultHandler);
+spellcheckerWasm.prepareSpellchecker(wasmPath, dictionaryPath, bigramPath, _defaultOptions)
+    .then(() => {
         process.stdout.write('Ready\n');
-        return;
-    }
-
-    const results = deserializeSuggestedItems(data, 0, data.length);
-    process.stdout.write('' + results.map(r => r.term) + '\n');
-});
-
-process.stdin.on('data', data => {
-    port1.postMessage({
-        word: '' + data,
-        options: _defaultCheckSpellingOptions,
+        process.stdin.on('data', data => {
+            spellcheckerWasm.checkSpelling('' + data, _defaultCheckSpellingOptions);
+        });
+    })
+    .catch((e) => {
+        process.stdout.write(`Error initializing the SpellChecker\n${e}\n`);
     });
-});
