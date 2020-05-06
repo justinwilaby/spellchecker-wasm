@@ -364,7 +364,7 @@ impl SymSpell {
                 let k = input_len - min;
                 let l = suggestion_len - min;
 
-                if input[i..] != suggestion[j..] ||
+                if input.as_bytes()[i..] != suggestion.as_bytes()[j..] ||
                     (min > 0 && &input_gc[k] != &suggestion_gc[l] &&
                         (&input_gc[k - 1] != &suggestion_gc[l] || &input_gc[k] != &suggestion_gc[l - 1])) {
                     // number of edits in prefix == max_edit_distance  AND no identical suffix

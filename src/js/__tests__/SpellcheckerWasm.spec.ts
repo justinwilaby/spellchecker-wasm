@@ -13,7 +13,7 @@ for (const region in testMap) {
     const bigramLocation = resolve(__dirname, '../../../lib/frequency_bigramdictionary_en_243_342.txt');
 
     describe(`SpellcheckerWasm - ${region}`, function() {
-        this.timeout(15000);
+        this.timeout(30000);
         it('should read from the supplied dictionary and perform lookups', async () => {
             let lastResults;
             const resultsHandler = results => {
