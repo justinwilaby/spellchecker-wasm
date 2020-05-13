@@ -22,7 +22,8 @@
     const spellchecker = new SpellcheckerWasm();
     const {notEqual} = window.chai.assert;
 
-    describe('The SpellcheckerWasm', () => {
+    describe('The SpellcheckerWasm', function() {
+        this.timeout(30000);
         it('should read from the supplied dictionary and perform lookups', async () => {
             const wasm = await fetch('../../../lib/spellchecker-wasm.wasm');
             const dictionary = await fetch('../../../lib/frequency_dictionary_en_82_765.txt');

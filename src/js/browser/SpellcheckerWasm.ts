@@ -68,8 +68,17 @@ export class SpellcheckerWasm extends SpellcheckerBase {
                     write_to_dictionary(0, 1, false);
                     return
                 }
-                this.writeToBuffer(readResult.value, memory);
-                write_to_dictionary(0, readResult.value.length, isBigram);
+                let p = 0;
+                // Enforce max chunk size to prevent overwriting memory
+                // allocated for the SymSpell struct in wasm.
+                // https://github.com/justinwilaby/spellchecker-wasm/issues/31
+                const chunkSize = 1024 * 1024;
+                while(p < readResult.value.length) {
+                    const slice = readResult.value.slice(p, p + chunkSize);
+                    p += chunkSize;
+                    this.writeToBuffer(slice, memory);
+                    write_to_dictionary(0, slice.byteLength, isBigram);
+                }
             }
         };
 

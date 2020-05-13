@@ -184,6 +184,10 @@ export abstract class SpellcheckerBase {
      */
     protected writeToBuffer(chunk: Uint8Array, memory: WebAssembly.Memory): void {
         if (!this.writeBuffer || this.writeBuffer.buffer !== memory.buffer || this.writeBuffer.byteLength < chunk.byteLength) {
+            if (memory.buffer.byteLength < chunk.byteLength) {
+                const delta = Math.ceil((chunk.byteLength - memory.buffer.byteLength) / 65536) // 64 * 1024;
+                memory.grow(delta);
+            }
             this.writeBuffer = new Uint8Array(memory.buffer, 0, chunk.byteLength);
         }
         this.writeBuffer.set(chunk, 0);
