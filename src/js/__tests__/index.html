@@ -1,61 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head></head>
     <meta charset="UTF-8">
     <title>Web tests</title>
 </head>
 <body>
-<div id="mocha"></div>
-<script>
-    // Testing purposes only. Normally, we'd let webpack define this
-    window.exports = {}
-</script>
-<script src="https://unpkg.com/chai/chai.js"></script>
-<script src="https://unpkg.com/mocha/mocha.js"></script>
-<script class="mocha-init">
-    mocha.setup('bdd');
-    mocha.checkLeaks();
-</script>
-<script src="../../../lib/browser/index.js"></script>
-<script>
-    const {SpellcheckerWasm} = exports['spellchecker-wasm'];
-    const spellchecker = new SpellcheckerWasm();
-    const {notEqual} = window.chai.assert;
+<script type="module">
+    import { SpellcheckerWasm } from '../../../lib/esm/index.js';
 
-    describe('The SpellcheckerWasm', function() {
-        this.timeout(30000);
-        it('should read from the supplied dictionary and perform lookups', async () => {
+    window.testResults = { passed: 0, failed: 0, errors: [] };
+
+    async function runTests() {
+        const spellchecker = new SpellcheckerWasm();
+        
+        let lastResults;
+        spellchecker.resultHandler = results => {
+            lastResults = results;
+        };
+
+        try {
             const wasm = await fetch('../../../lib/spellchecker-wasm.wasm');
             const dictionary = await fetch('../../../lib/frequency_dictionary_en_82_765.txt');
             const misspellings = await fetch('./commonMisspellings_en_82_765.json');
             const commonMisspellings = await misspellings.json();
 
-            let lastResults;
-            spellchecker.resultHandler = results => {
-                lastResults = results;
-            };
             const t = performance.now();
             await spellchecker.prepareSpellchecker(wasm, dictionary);
-            console.log(`standard dictionary loaded in ${performance.now() - t} ms\n`);
-            let lookupTimes = [];
-            commonMisspellings.forEach(({correctSpelling, misspellings}) => {
-                misspellings.forEach(word => {
-                    const t = performance.now();
-                    spellchecker.checkSpelling(word.toLowerCase());
-                    const s = performance.now();
-                    lookupTimes.push(performance.now() - t);
-                    const terms = lastResults.map(result => result.term);
-                    notEqual(terms.indexOf(correctSpelling.toLowerCase()), -1);
-                });
-            });
-            const totalTime = lookupTimes.reduce((previousValue, currentValue) => (previousValue += currentValue));
-            console.log(`Average lookup time: ${totalTime / lookupTimes.length} ms\n`);
-        });
-    }, 5000);
+            console.log(`standard dictionary loaded in ${performance.now() - t} ms`);
 
-</script>
-<script class="mocha-exec">
-    mocha.run();
+            let allPassed = true;
+            for (const {correctSpelling, misspellings: words} of commonMisspellings) {
+                for (const word of words) {
+                    spellchecker.checkSpelling(word.toLowerCase());
+                    const terms = lastResults.map(r => r.term);
+                    if (!terms.includes(correctSpelling.toLowerCase())) {
+                        allPassed = false;
+                        window.testResults.errors.push(
+                            `Expected '${correctSpelling}' for '${word}', got: ${terms.join(', ')}`
+                        );
+                    }
+                }
+            }
+
+            if (allPassed) {
+                window.testResults.passed = 1;
+                console.log('All tests passed!');
+            } else {
+                window.testResults.failed = window.testResults.errors.length;
+                console.error('Tests failed:', window.testResults.errors);
+            }
+        } catch (e) {
+            window.testResults.errors.push(e.message);
+            window.testResults.failed = 1;
+            console.error('Test error:', e);
+        }
+    }
+
+    runTests();
 </script>
 </body>
 </html>

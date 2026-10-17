@@ -1,10 +1,10 @@
 # Spellchecker + WebAssembly
 *When you absolutely, positively have to have the fastest spellchecker in the room, accept no substitutes.*
 
-[![Build Status](https://travis-ci.org/justinwilaby/spellchecker-wasm.svg?branch=master)](https://travis-ci.org/justinwilaby/spellchecker-wasm)
+[![Tests](https://github.com/justinwilaby/spellchecker-wasm/actions/workflows/test.yml/badge.svg)](https://github.com/justinwilaby/spellchecker-wasm/actions/workflows/test.yml)
 [![Coverage Status](https://coveralls.io/repos/github/justinwilaby/spellchecker-wasm/badge.svg?branch=master)](https://coveralls.io/github/justinwilaby/spellchecker-wasm?branch=master)
 
-* **Fast** - Based on [SymSpell](https://github.com/wolfgarbe/symspell) v6.6 with bigram support.
+* **Fast** - Based on [SymSpell](https://github.com/wolfgarbe/symspell) v6.7.3 with bigram support.
 * **Plug and play** - Ready to go out of the box (batteries included).
 
 Spellcheck-wasm is an extremely fast spellchecker for [WebAssembly](https://developer.mozilla.org/en-US/docs/WebAssembly) complete with
@@ -38,7 +38,7 @@ Then use `spellcheck` to enter interactive mode. For supported arguments, run `s
 const { webFrame } = require('electron');
 const { SpellcheckerWasm }  = require('spellchecker-wasm');
 
-const wasmPath = require.resolve('spellchecker-wasm/lib/spellcheck-wasm.wasm');
+const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
 const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
 const spellchecker = new SpellcheckerWasm();
 

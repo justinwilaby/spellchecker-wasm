@@ -786,6 +786,18 @@ impl SymSpell {
     /// the word segmented and spelling corrected string,
     /// the Edit distance sum between input string and corrected string,
     /// the Sum of word occurence probabilities in log scale (a measure of how common and probable the corrected segmentation is).</returns>
+    /// Normalizes input for lookup: Nfkc normalization, lowercase, remove hyphens
+    fn normalize_for_lookup(input: &str) -> String {
+        input
+            .replace("ﬀ", "ff")
+            .replace("ﬁ", "fi")
+            .replace("ﬂ", "fl")
+            .replace("ﬃ", "ffi")
+            .replace("ﬄ", "ffl")
+            .to_lowercase()
+            .replace('-', "")
+    }
+
     pub fn word_segmentation(
         &self,
         input: &str,
@@ -794,65 +806,68 @@ impl SymSpell {
     ) -> (String, String, usize, f64) {
         let max_segmentation_word_len =
             max_segmentation_word_len_opt.unwrap_or(self.max_dictionary_word_length);
-        let input_gc = GraphemeClusters::new(input);
-        let input_len = input_gc.len();
+
+        // Pre-normalize entire input (Nfkc, lowercase, remove hyphens)
+        let normalized_input = Self::normalize_for_lookup(input);
+        let input_chars: Vec<char> = normalized_input.chars().collect();
+        let input_len = input_chars.len();
         let capacity = max_segmentation_word_len.min(input_len);
-        let mut compositions: Vec<(String, String, usize, f64)> = Vec::with_capacity(capacity);
+        // Ensure at least 1 element for the first iteration
+        let actual_capacity = if capacity == 0 { 1 } else { capacity };
+        let mut compositions: Vec<(String, String, usize, f64)> =
+            vec![(String::new(), String::new(), 0, 0.0); actual_capacity];
 
         let mut circular_index = -1;
+
         // outer loop (column): all possible part start positions
         for j in 0..input_len {
-            // inner loop (row): all possible part lengths (from start position): part can't be bigger than longest word in dictionary (other than long unknown word)
-            let max = max_segmentation_word_len.min(input_len - j);
+            // Check if current position starts with space
+            let current_char = input_chars[j];
+            let starts_with_space = current_char == ' '
+                || current_char == '\n'
+                || current_char == '\r'
+                || current_char == '\t';
+
+            // Determine actual start position (skip leading space)
+            let actual_start = if starts_with_space { j + 1 } else { j };
+            let separator_len = if !starts_with_space && j > 0 { 1 } else { 0 };
+
+            // inner loop (row): all possible part lengths (from actual start)
+            let max = max_segmentation_word_len.min(input_len - actual_start);
             for i in 1..max + 1 {
                 // get top spelling correction/ed for part
-                let input_range = input_gc.get_slice_range(j..i);
-                let mut part = unsafe { input.get_unchecked(input_range).to_string() };
-                let mut separator_len = 0;
+                let part_chars = &input_chars[actual_start..actual_start + i];
+                let part: String = part_chars.iter().collect();
                 let mut top_edit_distance = 0;
 
-                // remove space for levensthein calculation
-                if " \n\r\t".contains(unsafe { input.get_unchecked(0..1) }) {
-                    part = unsafe { input.get_unchecked(j + 1..i).to_string() };
-                } else {
-                    // add ed+1: space did not exist, had to be inserted
-                    separator_len = 1;
+                // Check if part is non-empty before accessing first character (v6.7.2 fix)
+                if part.is_empty() {
+                    continue;
                 }
 
-                // remove space from part1, add number of removed spaces to topEd
-                top_edit_distance += GraphemeClusters::new(&part).len();
-                // remove space
-                part = part.replace(" ", "");
-                // add number of removed spaces to ed
-                let part_len = GraphemeClusters::new(&part).len();
-                top_edit_distance -= part_len;
+                let part_len = part.len();
 
                 let results = self.lookup(&part, Verbosity::Top, max_edit_distance, false, true);
                 let (top_result, top_probability_log) = if !results.is_empty() {
                     let result = &results[0];
                     top_edit_distance += result.distance;
-                    // Naive Bayes Rule
-                    // we assume the word probabilities of two words to be independent
-                    // therefore the resulting probability of the word combination is the product of the two word probabilities
-
-                    // instead of computing the product of probabilities we are computing the sum of the logarithm of probabilities
-                    // because the probabilities of words are about 10^-10, the product of many such small numbers could exceed (underflow) the floating number range and become zero
-                    // log(ab)=log(a)+log(b)
                     (&result.term, (result.count as f64 / N).log10())
                 } else {
-                    // default, if word not found
-                    // otherwise long input text would win as long unknown word (with ed=edmax+1 ), although there there should many spaces inserted
                     (&part, (10.0 / (N * 10.0f64.powf(part_len as f64))).log10())
                 };
 
-                let destination_index = ((i as i32 + circular_index) % capacity as i32) as usize;
+                // Calculate total edit distance including separator
+                let total_edit_distance = top_edit_distance + separator_len;
+
+                let destination_index =
+                    ((i as i32 + circular_index) % actual_capacity as i32) as usize;
 
                 //set values in first loop
                 if j == 0 {
                     compositions[destination_index] = (
                         part.to_string(),
                         top_result.to_string(),
-                        top_edit_distance,
+                        total_edit_distance,
                         top_probability_log,
                     );
                 }
@@ -860,28 +875,27 @@ impl SymSpell {
                 if circular_index == -1 {
                     continue;
                 }
-                // Cleaner conditionals this way
+
                 let (_, _, d_distance_sum, d_probability_log_sum) =
                     &compositions[destination_index];
                 let (c_segmented_string, c_corrected_string, c_distance_sum, c_probability_log_sum) =
                     &compositions[circular_index as usize];
 
-                if i == max_segmentation_word_len ||
-                    //replace values if better probabilityLogSum, if same edit distance OR one space difference
-                    ((c_distance_sum + top_edit_distance == *d_distance_sum || c_distance_sum + separator_len + top_edit_distance == *d_distance_sum) &&
-                        d_probability_log_sum < c_probability_log_sum) ||
-                    c_distance_sum + separator_len + top_edit_distance < *d_distance_sum
+                if i == max_segmentation_word_len
+                    || ((c_distance_sum + total_edit_distance == *d_distance_sum)
+                        && d_probability_log_sum < c_probability_log_sum)
+                    || c_distance_sum + total_edit_distance < *d_distance_sum
                 {
                     compositions[destination_index] = (
                         c_segmented_string.to_owned() + " " + &part,
                         c_corrected_string.to_owned() + " " + top_result,
-                        *c_distance_sum + separator_len + top_edit_distance,
+                        *c_distance_sum + total_edit_distance,
                         *c_probability_log_sum + top_probability_log,
                     );
                 }
             }
             circular_index += 1;
-            if circular_index as usize == capacity {
+            if circular_index as usize == actual_capacity {
                 circular_index = 0;
             }
         }

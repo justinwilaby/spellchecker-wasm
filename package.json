@@ -1,6 +1,6 @@
 {
   "name": "spellchecker-wasm",
-  "version": "0.3.3",
+  "version": "0.2.0",
   "repository": "https://github.com/justinwilaby/spellchecker-wasm",
   "description": "An extremely fast multi-thread capable Spellchecker written in Rust compiled to WebAssembly for Node.",
   "type": "module",
@@ -17,7 +17,7 @@
     "test:watch": "node --test --watch --enable-source-maps 'src/js/**/*.spec.ts'",
     "test:coverage": "node --test --enable-source-maps --experimental-test-coverage 'src/js/**/*.spec.ts'",
     "test:web-integration": "node --enable-source-maps 'src/js/__tests__/web-integration.js'",
-    "build:wasm": "rustc ./src/lib.rs -Clto -O --crate-type cdylib --target wasm32-unknown-unknown -C link-args=--import-undefined -o ./lib/spellchecker-wasm.wasm",
+    "build:wasm": "cargo rustc --target wasm32-unknown-unknown --release -- -C link-args=--import-undefined && wasm-opt -O2 target/wasm32-unknown-unknown/release/sym_spell_wasm.wasm -o lib/spellchecker-wasm.wasm",
     "build:esm": "tsc --module esnext --outDir lib/esm --target esnext",
     "build:cjs": "tsc --module commonjs --outDir lib/cjs --target esnext",
     "build:types": "tsc --outDir lib/types --emitDeclarationOnly --declaration",
@@ -44,7 +44,9 @@
     "spellcheck": "./bin/spellchecker"
   },
   "devDependencies": {
+    "@playwright/test": "^1.50.0",
     "@types/node": "^22.0.0",
+    "playwright": "^1.50.0",
     "typescript": "^7.0.0",
     "yargs": "^17.0.0"
   }
