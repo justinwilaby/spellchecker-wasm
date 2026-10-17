@@ -1,4 +1,4 @@
-import { SuggestedItem } from "./SuggestedItem";
+import { SuggestedItem } from "./SuggestedItem.ts";
 export interface WasmSymSpell extends WebAssembly.Exports {
     memory: WebAssembly.Memory;
     symspell: (dictionaryEditDistance: number, countThreshold: number) => void;
@@ -6,11 +6,12 @@ export interface WasmSymSpell extends WebAssembly.Exports {
     lookup_compound: (ptr: number, length: number, maxEditDistance: number) => void;
     write_to_dictionary: (prt: number, length: number, isBigram: boolean) => void;
 }
-export declare enum Verbosity {
-    Top = 0,
-    Closest = 1,
-    All = 2
-}
+export declare const Verbosity: {
+    readonly Top: 0;
+    readonly Closest: 1;
+    readonly All: 2;
+};
+export type Verbosity = typeof Verbosity[keyof typeof Verbosity];
 export interface SymSpellOptions {
     /**
      * The maximum Levenshtein distance to consider
@@ -30,7 +31,7 @@ export interface CheckSpellingOptions {
     includeUnknown: boolean;
     includeSelf: boolean;
 }
-export declare type ResultsHandler = (suggestedItems: SuggestedItem[]) => void;
+export type ResultsHandler = (suggestedItems: SuggestedItem[]) => void;
 export declare const defaultOptions: SymSpellOptions;
 export declare const defaultCheckSpellingOptions: CheckSpellingOptions;
 /**
@@ -67,8 +68,8 @@ export declare abstract class SpellcheckerBase {
      * @param bigramLocation
      * @param options
      */
-    abstract prepareSpellchecker(wasmLocation: string, dictionaryLocation: string, bigramLocation: string, options: SymSpellOptions): Promise<void>;
-    abstract prepareSpellchecker(wasFetchResponse: Response, dictionaryFetchResponse: Response, bigramFetchResponse: Response, options: SymSpellOptions): Promise<void>;
+    abstract prepareSpellchecker(wasmLocation: string, dictionaryLocation: string, bigramLocation?: string, options?: SymSpellOptions): Promise<void>;
+    abstract prepareSpellchecker(wasFetchResponse: Response, dictionaryFetchResponse: Response, bigramFetchResponse?: Response, options?: SymSpellOptions): Promise<void>;
     /**
      * Performs a single spelling check based on the supplied word and options.
      * The suggestions list will be provided to the resultHandler().

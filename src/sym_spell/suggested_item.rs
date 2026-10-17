@@ -1,5 +1,4 @@
 use crate::sym_spell::Encode;
-use std::mem::transmute;
 
 #[derive(Clone)]
 pub struct SuggestItem {
@@ -33,19 +32,17 @@ impl SuggestItem {
 
 impl Encode<Vec<u8>> for SuggestItem {
     fn encode(&self) -> Vec<u8> {
-        unsafe {
-            let ct = transmute::<u32, [u8; 4]>(self.count as u32);
-            let dis = transmute::<u32, [u8; 4]>(self.distance as u32);
-            let len = transmute::<u32, [u8; 4]>(self.term.len() as u32);
+        let ct = u32::to_ne_bytes(self.count as u32);
+        let dis = u32::to_ne_bytes(self.distance as u32);
+        let len = u32::to_ne_bytes(self.term.len() as u32);
 
-            let mut encoded = vec![];
-            encoded.extend_from_slice(&ct);
-            encoded.extend_from_slice(&dis);
-            encoded.extend_from_slice(&len);
-            encoded.extend_from_slice(self.term.as_bytes());
+        let mut encoded = vec![];
+        encoded.extend_from_slice(&ct);
+        encoded.extend_from_slice(&dis);
+        encoded.extend_from_slice(&len);
+        encoded.extend_from_slice(self.term.as_bytes());
 
-            encoded
-        }
+        encoded
     }
 }
 
@@ -62,7 +59,7 @@ mod suggest_item_tests {
         assert_eq!(encoded[0], 2); // count
         assert_eq!(encoded[4], 1); // distance
         assert_eq!(encoded[8], 4); // term.len()
-        let term = unsafe { str::from_utf8_unchecked(&encoded[9..])};
+        let term = unsafe { str::from_utf8_unchecked(&encoded[9..]) };
         assert_eq!(term, "test")
     }
 }
