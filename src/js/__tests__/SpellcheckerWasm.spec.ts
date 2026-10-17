@@ -5,7 +5,7 @@ import type { ResultsHandler } from '../SpellCheckerBase.ts';
 import type { SuggestedItem } from '../SuggestedItem.ts';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import testMap from './language_tests_map.json' with { type: 'json' };
 
@@ -217,6 +217,130 @@ for (const region of Object.keys(testMapTyped)) {
     runRegionTests(region, testMapTyped[region]);
 }
 
+// WordSegmentation improvements tests
+describe('SpellcheckerWasm - WordSegmentation improvements', () => {
+    const dictionaryLocation = join(__dirname, '../../../lib/frequency_dictionary_en_US_60size_1M_1gram_20090715.txt');
+    const bigramLocation = join(__dirname, '../../../lib/frequency_bigramdictionary_en_243_342.txt');
+
+    it('should remove hyphens during compound lookup', { timeout: 30000 }, async () => {
+        let lastResults: SuggestedItem[];
+        const resultsHandler: ResultsHandler = (results) => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
+        spellchecker.checkSpellingCompound('hel-lo world');
+
+        const terms = lastResults!.map(r => r.term);
+        assert.ok(
+            terms.includes('hello world'),
+            `Expected "hello world" in results, got: ${terms.join(', ')}`
+        );
+    });
+
+    it('should handle case-insensitive compound lookup', { timeout: 30000 }, async () => {
+        let lastResults: SuggestedItem[];
+        const resultsHandler: ResultsHandler = (results) => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
+        // Uppercase correct words pass through unchanged (case handling works)
+        spellchecker.checkSpellingCompound('HELLO WORLD');
+
+        assert.ok(lastResults !== undefined, 'Expected results for uppercase input');
+        assert.ok(lastResults!.length > 0, 'Expected non-empty results for uppercase input');
+    });
+
+    it('should handle punctuation in compound lookup', { timeout: 30000 }, async () => {
+        let lastResults: SuggestedItem[];
+        const resultsHandler: ResultsHandler = (results) => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
+        spellchecker.checkSpellingCompound('hello,world');
+
+        assert.ok(lastResults !== undefined, 'Expected results for punctuated input');
+        assert.ok(lastResults!.length > 0, 'Expected non-empty results for punctuated input');
+    });
+
+    it('should normalize ligatures during compound lookup', { timeout: 30000 }, async () => {
+        let lastResults: SuggestedItem[];
+        const resultsHandler: ResultsHandler = (results) => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
+        // "scientiﬁc" with ﬁ ligature (U+FB01)
+        spellchecker.checkSpellingCompound('scienti\uFB01c');
+
+        const terms = lastResults!.map(r => r.term);
+        assert.ok(
+            terms.includes('scientific'),
+            `Expected "scientific" in results, got: ${terms.join(', ')}`
+        );
+    });
+});
+
+// Multi-byte UTF-8 tests
+describe('SpellcheckerWasm - Multi-byte UTF-8', () => {
+    it('should support dictionaries in other languages with UTF-8 characters', { timeout: 30000 }, async () => {
+        let lastResults: SuggestedItem[];
+        const resultsHandler: ResultsHandler = (results) => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, russianDictionaryLocation);
+        spellchecker.checkSpelling('свойй');
+        assert.deepStrictEqual(
+            lastResults![0].toJSON(),
+            { count: 28678, distance: 1, term: 'свой' }
+        );
+    });
+});
+
+describe('SpellcheckerWasm - includeUnknown and includeSelf', () => {
+    it('distinguishes a known input from an unknown input in Closest and All modes', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'spellchecker-wasm-27-'));
+        const dictionaryLocation = join(directory, 'dictionary.txt');
+        try {
+            await writeFile(dictionaryLocation, 'eradicate 42\r\neradicated 7\r\n');
+            let lastResults: SuggestedItem[] = [];
+            const spellchecker = new SpellcheckerWasm(results => { lastResults = results; });
+            await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation);
+
+            for (const verbosity of [1, 2] as const) {
+                for (const includeUnknown of [false, true]) {
+                    for (const includeSelf of [false, true]) {
+                        const options = { verbosity, maxEditDistance: 2, includeUnknown, includeSelf };
+                        spellchecker.checkSpelling('eradicate', options);
+                        const expectedKnown = verbosity === 1
+                            ? (includeSelf ? [{ term: 'eradicate', count: 42, distance: 0 }] : [])
+                            : (includeSelf
+                                ? [{ term: 'eradicated', count: 7, distance: 1 }, { term: 'eradicate', count: 42, distance: 0 }]
+                                : [{ term: 'eradicated', count: 7, distance: 1 }]);
+                        assert.deepStrictEqual(lastResults.map(item => item.toJSON()), expectedKnown,
+                            `known input: verbosity=${verbosity}, includeUnknown=${includeUnknown}, includeSelf=${includeSelf}`);
+
+                        spellchecker.checkSpelling('zzzzzzzzzzzzzz', options);
+                        assert.deepStrictEqual(lastResults.map(item => item.toJSON()),
+                            includeUnknown ? [{ term: 'zzzzzzzzzzzzzz', count: 0, distance: 3 }] : [],
+                            `unknown input: verbosity=${verbosity}, includeUnknown=${includeUnknown}, includeSelf=${includeSelf}`);
+                    }
+                }
+            }
+        } finally {
+            await rm(directory, { recursive: true, force: true });
+        }
+    });
+});
+
 describe('SpellcheckerWasm - synchronous suggestions', () => {
     it('requires preparation before direct lookups', () => {
         const spellchecker = new SpellcheckerWasm();
@@ -316,93 +440,5 @@ describe('SpellcheckerWasm - synchronous suggestions', () => {
         assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
         await assert.rejects(failedPreparation, /Dictionary Response body is null/);
         assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
-    });
-});
-
-// WordSegmentation improvements tests
-describe('SpellcheckerWasm - WordSegmentation improvements', () => {
-    const dictionaryLocation = join(__dirname, '../../../lib/frequency_dictionary_en_US_60size_1M_1gram_20090715.txt');
-    const bigramLocation = join(__dirname, '../../../lib/frequency_bigramdictionary_en_243_342.txt');
-
-    it('should remove hyphens during compound lookup', { timeout: 30000 }, async () => {
-        let lastResults: SuggestedItem[];
-        const resultsHandler: ResultsHandler = (results) => {
-            lastResults = results;
-        };
-        const spellchecker = new SpellcheckerWasm(resultsHandler);
-
-        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
-        spellchecker.checkSpellingCompound('hel-lo world');
-
-        const terms = lastResults!.map(r => r.term);
-        assert.ok(
-            terms.includes('hello world'),
-            `Expected "hello world" in results, got: ${terms.join(', ')}`
-        );
-    });
-
-    it('should handle case-insensitive compound lookup', { timeout: 30000 }, async () => {
-        let lastResults: SuggestedItem[];
-        const resultsHandler: ResultsHandler = (results) => {
-            lastResults = results;
-        };
-        const spellchecker = new SpellcheckerWasm(resultsHandler);
-
-        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
-        // Uppercase correct words pass through unchanged (case handling works)
-        spellchecker.checkSpellingCompound('HELLO WORLD');
-
-        assert.ok(lastResults !== undefined, 'Expected results for uppercase input');
-        assert.ok(lastResults!.length > 0, 'Expected non-empty results for uppercase input');
-    });
-
-    it('should handle punctuation in compound lookup', { timeout: 30000 }, async () => {
-        let lastResults: SuggestedItem[];
-        const resultsHandler: ResultsHandler = (results) => {
-            lastResults = results;
-        };
-        const spellchecker = new SpellcheckerWasm(resultsHandler);
-
-        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
-        spellchecker.checkSpellingCompound('hello,world');
-
-        assert.ok(lastResults !== undefined, 'Expected results for punctuated input');
-        assert.ok(lastResults!.length > 0, 'Expected non-empty results for punctuated input');
-    });
-
-    it('should normalize ligatures during compound lookup', { timeout: 30000 }, async () => {
-        let lastResults: SuggestedItem[];
-        const resultsHandler: ResultsHandler = (results) => {
-            lastResults = results;
-        };
-        const spellchecker = new SpellcheckerWasm(resultsHandler);
-
-        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
-        // "scientiﬁc" with ﬁ ligature (U+FB01)
-        spellchecker.checkSpellingCompound('scienti\uFB01c');
-
-        const terms = lastResults!.map(r => r.term);
-        assert.ok(
-            terms.includes('scientific'),
-            `Expected "scientific" in results, got: ${terms.join(', ')}`
-        );
-    });
-});
-
-// Multi-byte UTF-8 tests
-describe('SpellcheckerWasm - Multi-byte UTF-8', () => {
-    it('should support dictionaries in other languages with UTF-8 characters', { timeout: 30000 }, async () => {
-        let lastResults: SuggestedItem[];
-        const resultsHandler: ResultsHandler = (results) => {
-            lastResults = results;
-        };
-        const spellchecker = new SpellcheckerWasm(resultsHandler);
-
-        await spellchecker.prepareSpellchecker(wasmPath, russianDictionaryLocation);
-        spellchecker.checkSpelling('свойй');
-        assert.deepStrictEqual(
-            lastResults![0].toJSON(),
-            { count: 28678, distance: 1, term: 'свой' }
-        );
     });
 });

@@ -10,7 +10,7 @@ export interface WasmSymSpell extends WebAssembly.Exports {
 
     lookup_compound: (ptr: number, length: number, maxEditDistance: number) => void;
 
-    write_to_dictionary: (prt: number, length: number, isBigram: boolean) => void;
+    write_to_dictionary: (prt: number, length: number, isBigram: boolean) => boolean;
 }
 
 export const Verbosity = {
@@ -75,6 +75,7 @@ export abstract class SpellcheckerBase {
     protected wasmSymSpell!: WasmSymSpell;
     protected writeBuffer!: Uint8Array;
     protected prepared = false;
+    protected dictionaryEditDistance?: number;
 
     /**
      * The handler set by the consumer to receive
@@ -103,7 +104,9 @@ export abstract class SpellcheckerBase {
      */
     public writeToDictionary(chunk: Uint8Array, isBigram = false): void {
         this.writeToBuffer(chunk, this.wasmSymSpell.memory);
-        this.wasmSymSpell.write_to_dictionary(0, chunk.byteLength, isBigram);
+        if (!this.wasmSymSpell.write_to_dictionary(0, chunk.byteLength, isBigram)) {
+            throw new TypeError('Dictionary contains invalid UTF-8');
+        }
     }
 
     /**
@@ -118,12 +121,12 @@ export abstract class SpellcheckerBase {
         wasmLocation: string,
         dictionaryLocation: string,
         bigramLocation?: string,
-        options?: SymSpellOptions): Promise<void>;
+        options?: Partial<SymSpellOptions>): Promise<void>;
     public abstract prepareSpellchecker(
         wasFetchResponse: Response,
         dictionaryFetchResponse: Response,
         bigramFetchResponse?: Response,
-        options?: SymSpellOptions): Promise<void>
+        options?: Partial<SymSpellOptions>): Promise<void>
 
     /**
      * Performs a single spelling check based on the supplied word and options.
@@ -132,7 +135,9 @@ export abstract class SpellcheckerBase {
      * @param word string The word to perform spell checking on.
      * @param options CheckSpellingOptions The options to use for this spell check lookup
      */
-    public checkSpelling(word: Uint8Array | string, options: CheckSpellingOptions = defaultCheckSpellingOptions): void {
+    public checkSpelling(word: Uint8Array | string, options: Partial<CheckSpellingOptions> = defaultCheckSpellingOptions): void {
+        const resolvedOptions = {...defaultCheckSpellingOptions, ...options};
+        this.validateLookupDistance(resolvedOptions.maxEditDistance);
         const {lookup, memory} = this.wasmSymSpell;
         let encodedString;
         if (word instanceof Uint8Array) {
@@ -141,7 +146,7 @@ export abstract class SpellcheckerBase {
             encodedString = this.encodeString(word);
         }
         this.writeToBuffer(encodedString, memory);
-        lookup(0, encodedString.byteLength, options.verbosity, options.maxEditDistance, options.includeUnknown, options.includeSelf);
+        lookup(0, encodedString.byteLength, resolvedOptions.verbosity, resolvedOptions.maxEditDistance, resolvedOptions.includeUnknown, resolvedOptions.includeSelf);
     }
 
     /** Returns the suggestions for this word synchronously after preparation. */
@@ -156,7 +161,9 @@ export abstract class SpellcheckerBase {
      * @param sentence string The sentence to perform spell checking on.
      * @param options CheckSpellingOptions The options to use for this spell check lookup
      */
-    public checkSpellingCompound(sentence: Uint8Array | string, options: Pick<CheckSpellingOptions, 'maxEditDistance'> = defaultCheckSpellingOptions): void {
+    public checkSpellingCompound(sentence: Uint8Array | string, options: Partial<Pick<CheckSpellingOptions, 'maxEditDistance'>> = defaultCheckSpellingOptions): void {
+        const resolvedOptions = {...defaultCheckSpellingOptions, ...options};
+        this.validateLookupDistance(resolvedOptions.maxEditDistance);
         const {lookup_compound, memory} = this.wasmSymSpell;
         let encodedString;
         if (sentence instanceof Uint8Array) {
@@ -165,7 +172,19 @@ export abstract class SpellcheckerBase {
             encodedString = this.encodeString(sentence);
         }
         this.writeToBuffer(encodedString, memory);
-        lookup_compound(0, encodedString.byteLength, options.maxEditDistance);
+        lookup_compound(0, encodedString.byteLength, resolvedOptions.maxEditDistance);
+    }
+
+    protected validateLookupDistance(distance: number): void {
+        if (!Number.isSafeInteger(distance) || distance < 0 || distance > 0xffffffff) {
+            throw new RangeError('maxEditDistance must be an integer between 0 and 4294967295');
+        }
+        if (this.dictionaryEditDistance === undefined) {
+            throw new Error('Call prepareSpellchecker before checking spelling');
+        }
+        if (distance > this.dictionaryEditDistance) {
+            throw new RangeError(`maxEditDistance (${distance}) must be less than or equal to dictionaryEditDistance (${this.dictionaryEditDistance})`);
+        }
     }
 
     /** Returns the compound suggestions synchronously after preparation. */
@@ -194,7 +213,7 @@ export abstract class SpellcheckerBase {
      * their respective SuggestedItem instances.
      *
      * @param ptr number The pointer in memory where this result set is located
-     * @param length number The number of total bytes in the set
+     * @param length number The number of total bytes in the result set
      */
     protected resultTrap = (ptr: number, length: number): void => {
         const {memory} = this.wasmSymSpell;

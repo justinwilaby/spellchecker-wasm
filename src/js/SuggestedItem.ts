@@ -35,7 +35,7 @@ export class SuggestedItem {
 }
 
 export function readU32(buffer: Uint8Array, ptr: number): number {
-    return (buffer[ptr + 3] << 24) | (buffer[ptr + 2] << 16) | (buffer[ptr + 1] << 8) | buffer[ptr];
+    return ((buffer[ptr + 3] << 24) | (buffer[ptr + 2] << 16) | (buffer[ptr + 1] << 8) | buffer[ptr]) >>> 0;
 }
 
 /**

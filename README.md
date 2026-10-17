@@ -148,6 +148,12 @@ spellchecker.checkSpelling('thereeeee', {
 });
 // lastResults.length === 1
 ```
+`includeUnknown` returns the input with count `0` and distance `maxEditDistance + 1`
+only when the input is absent from the dictionary and no correction is found.
+If the input is known, `includeSelf: false` suppresses that exact match even when
+`includeUnknown: true`. With `verbosity: 2` (`All`), other dictionary matches
+within the edit distance may still be returned.
+
 ### Allowing for deeper word searches
 Given that the default `maxEditDistance`, which controls up to which edit distance words from the dictionary should be treated as suggestions, is 2, words such as `cofvvvfee` will not return suggestions.
 
@@ -170,29 +176,27 @@ spellchecker.checkSpelling('cofvvvfee', {
 // lastResults.length === 1, lastResults[0] --> 'coffee'
 ```
 *Caveat* : the `maxEditDistance` parameter that is passed to `checkSpelling` must be less-than-or-equal to the `dictionaryEditDistance` parameter of `prepareSpellchecker`. E.g. : 
+
+Dictionary frequencies above `4,294,967,295` are capped at that value in results because counts use a 32-bit wire format.
 ```js
-// BAD!
-await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation); // Default value of dictionaryEditDistance is 2
+// Default dictionaryEditDistance is 2.
 let lastResults;
-const resultsHandler = results => {
-    lastResults = results;
-};
+const spellchecker = new SpellcheckerWasm(results => { lastResults = results; });
+await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation);
 spellchecker.checkSpelling('cofvvvfee', {
     includeUnknown: false,
     maxEditDistance: 4,
     verbosity: 1,
     includeSelf: false
 });
-// ERROR!
+// Throws RangeError: maxEditDistance (4) must be less than or equal to dictionaryEditDistance (2)
 ```
 
 ```js
-// Good
-await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, null, {countThreshold: 2, dictionaryEditDistance: 4});
+// Configure the dictionary to support a distance of 4.
 let lastResults;
-const resultsHandler = results => {
-    lastResults = results;
-};
+const spellchecker = new SpellcheckerWasm(results => { lastResults = results; });
+await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, undefined, {countThreshold: 2, dictionaryEditDistance: 4});
 spellchecker.checkSpelling('cofvvvfee', {
     includeUnknown: false,
     maxEditDistance: 4,

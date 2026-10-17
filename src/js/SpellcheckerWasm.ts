@@ -41,8 +41,16 @@ export class SpellcheckerWasm extends SpellcheckerBase {
         wasmLocation: string | Response,
         dictionaryLocation: string | Response,
         bigramLocation?: string | Response,
-        options: SymSpellOptions = defaultOptions): Promise<void> {
+        options: Partial<SymSpellOptions> = defaultOptions): Promise<void> {
         this.prepared = false;
+        this.dictionaryEditDistance = undefined;
+
+        const resolvedOptions = {...defaultOptions, ...options};
+        for (const key of ['dictionaryEditDistance', 'countThreshold'] as const) {
+            if (!Number.isSafeInteger(resolvedOptions[key]) || resolvedOptions[key] < 0 || resolvedOptions[key] > 0xffffffff) {
+                throw new RangeError(`${key} must be an integer between 0 and 4294967295`);
+            }
+        }
 
         // Detect if we're using Response objects (browser) or file paths (Node.js)
         const useFetch = wasmLocation instanceof Response;
@@ -53,6 +61,9 @@ export class SpellcheckerWasm extends SpellcheckerBase {
             // Browser: instantiate from streaming Response
             if (!(dictionaryLocation instanceof Response)) {
                 throw new TypeError('The dictionaryLocation argument must be a Response object');
+            }
+            if (!wasmLocation.ok) {
+                throw new Error(`WASM Response failed: ${wasmLocation.status} ${wasmLocation.statusText}`);
             }
             result = await WebAssembly.instantiateStreaming(wasmLocation, {
                 env: {
@@ -91,7 +102,7 @@ export class SpellcheckerWasm extends SpellcheckerBase {
         const {symspell, write_to_dictionary, lookup, lookup_compound, memory} = result.instance.exports as WasmSymSpell;
         this.wasmSymSpell = {symspell, write_to_dictionary, lookup, lookup_compound, memory};
 
-        symspell(options.dictionaryEditDistance, options.countThreshold);
+        symspell(resolvedOptions.dictionaryEditDistance, resolvedOptions.countThreshold);
         const newline = new Uint8Array([10]);
 
         // Load standard dictionary
@@ -101,23 +112,28 @@ export class SpellcheckerWasm extends SpellcheckerBase {
         if (bigramLocation) {
             await this.loadDictionary(bigramLocation, memory, write_to_dictionary, newline, true);
         }
+
         this.prepared = true;
+        this.dictionaryEditDistance = resolvedOptions.dictionaryEditDistance;
     }
 
     private async loadDictionary(
         location: string | Response,
         memory: WebAssembly.Memory,
-        write_to_dictionary: (ptr: number, length: number, isBigram: boolean) => void,
+        write_to_dictionary: (ptr: number, length: number, isBigram: boolean) => boolean,
         newline: Uint8Array,
         isBigram: boolean): Promise<void> {
 
         if (location instanceof Response) {
             // Browser: stream from Response body
+            if (!location.ok) {
+                throw new Error(`Dictionary Response failed: ${location.status} ${location.statusText}`);
+            }
             if (!location.body) {
                 throw new Error('Dictionary Response body is null');
             }
             const reader = location.body.getReader();
-            await this.streamReaderIntoDictionary(reader, memory, write_to_dictionary, newline, isBigram);
+            await this.streamReaderIntoDictionary(reader, memory, write_to_dictionary, newline, isBigram, location.headers.get('Content-Length'));
         } else {
             // Node.js: read from file stream
             if (typeof location !== 'string') {
@@ -129,12 +145,15 @@ export class SpellcheckerWasm extends SpellcheckerBase {
                 stream.on('data', (chunk: Buffer | string) => {
                     const data = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
                     this.writeToBuffer(new Uint8Array(data), memory);
-                    write_to_dictionary(0, data.length, isBigram);
+                    if (!write_to_dictionary(0, data.length, isBigram)) {
+                        stream.destroy(new TypeError('Dictionary contains invalid UTF-8'));
+                    }
                 });
                 stream.on('close', () => {
+                    if (stream.errored) return;
                     this.writeToBuffer(newline, memory);
-                    write_to_dictionary(0, 1, isBigram);
-                    resolve();
+                    if (write_to_dictionary(0, 1, isBigram)) resolve();
+                    else reject(new TypeError('Dictionary contains invalid UTF-8'));
                 });
                 stream.on('error', reject);
             });
@@ -144,24 +163,34 @@ export class SpellcheckerWasm extends SpellcheckerBase {
     private async streamReaderIntoDictionary(
         reader: ReadableStreamDefaultReader,
         memory: WebAssembly.Memory,
-        write_to_dictionary: (ptr: number, length: number, isBigram: boolean) => void,
+        write_to_dictionary: (ptr: number, length: number, isBigram: boolean) => boolean,
         newline: Uint8Array,
-        isBigram: boolean): Promise<void> {
+        isBigram: boolean,
+        contentLength: string | null): Promise<void> {
 
+        let totalBytes = 0;
         while (true) {
             const readResult = await reader.read();
             if (readResult.done) {
+                if (contentLength !== null && Number(contentLength) !== totalBytes) {
+                    throw new Error(`Dictionary Response is incomplete: expected ${contentLength} bytes, received ${totalBytes}`);
+                }
                 this.writeToBuffer(newline, memory);
-                write_to_dictionary(0, 1, isBigram);
+                if (!write_to_dictionary(0, 1, isBigram)) {
+                    throw new TypeError('Dictionary contains invalid UTF-8');
+                }
                 return;
             }
+            totalBytes += readResult.value.byteLength;
             let p = 0;
             const chunkSize = 1024 * 1024; // 1MB chunks
             while (p < readResult.value.length) {
                 const slice = readResult.value.slice(p, p + chunkSize);
                 p += chunkSize;
                 this.writeToBuffer(slice, memory);
-                write_to_dictionary(0, slice.byteLength, isBigram);
+                if (!write_to_dictionary(0, slice.byteLength, isBigram)) {
+                    throw new TypeError('Dictionary contains invalid UTF-8');
+                }
             }
         }
     }
