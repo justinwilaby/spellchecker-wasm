@@ -42,6 +42,7 @@ export class SpellcheckerWasm extends SpellcheckerBase {
         dictionaryLocation: string | Response,
         bigramLocation?: string | Response,
         options: SymSpellOptions = defaultOptions): Promise<void> {
+        this.prepared = false;
 
         // Detect if we're using Response objects (browser) or file paths (Node.js)
         const useFetch = wasmLocation instanceof Response;
@@ -100,6 +101,7 @@ export class SpellcheckerWasm extends SpellcheckerBase {
         if (bigramLocation) {
             await this.loadDictionary(bigramLocation, memory, write_to_dictionary, newline, true);
         }
+        this.prepared = true;
     }
 
     private async loadDictionary(

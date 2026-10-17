@@ -31,8 +31,12 @@
             let allPassed = true;
             for (const {correctSpelling, misspellings: words} of commonMisspellings) {
                 for (const word of words) {
-                    spellchecker.checkSpelling(word.toLowerCase());
-                    const terms = lastResults.map(r => r.term);
+                    const suggestions = spellchecker.suggest(word.toLowerCase());
+                    const terms = suggestions.map(r => r.term);
+                    if (lastResults !== suggestions) {
+                        allPassed = false;
+                        window.testResults.errors.push(`Callback result differs from return value for '${word}'`);
+                    }
                     if (!terms.includes(correctSpelling.toLowerCase())) {
                         allPassed = false;
                         window.testResults.errors.push(
@@ -40,6 +44,17 @@
                         );
                     }
                 }
+            }
+
+            const withoutCallback = new SpellcheckerWasm();
+            const wasmAgain = await fetch('../../../lib/spellchecker-wasm.wasm');
+            const dictionaryAgain = await fetch('../../../lib/frequency_dictionary_en_82_765.txt');
+            await withoutCallback.prepareSpellchecker(wasmAgain, dictionaryAgain);
+            if (!withoutCallback.suggest('helo').some(item => item.term === 'hello') ||
+                withoutCallback.suggest('hello').length !== 0 ||
+                !withoutCallback.suggestCompound('hello wrld').some(item => item.term === 'hello world')) {
+                allPassed = false;
+                window.testResults.errors.push('Direct suggestions did not return per-call word and compound results');
             }
 
             if (allPassed) {

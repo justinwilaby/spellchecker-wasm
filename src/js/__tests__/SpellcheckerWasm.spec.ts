@@ -5,6 +5,8 @@ import type { ResultsHandler } from '../SpellCheckerBase.ts';
 import type { SuggestedItem } from '../SuggestedItem.ts';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import testMap from './language_tests_map.json' with { type: 'json' };
 
 interface RegionConfig {
@@ -214,6 +216,108 @@ async function runRegionTests(region: string, regionConfig: RegionConfig) {
 for (const region of Object.keys(testMapTyped)) {
     runRegionTests(region, testMapTyped[region]);
 }
+
+describe('SpellcheckerWasm - synchronous suggestions', () => {
+    it('requires preparation before direct lookups', () => {
+        const spellchecker = new SpellcheckerWasm();
+        assert.throws(() => spellchecker.suggest('hello'), /Await prepareSpellchecker/);
+        assert.throws(() => spellchecker.suggestCompound('hello world'), /Await prepareSpellchecker/);
+    });
+
+    it('returns each call’s results, supports optional callbacks, and isolates instances', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'spellchecker-wasm-63-'));
+        const dictionaryLocation = join(directory, 'dictionary.txt');
+        try {
+            await writeFile(dictionaryLocation, 'hello 100\r\nworld 80\r\n');
+            const callbackTerms: string[][] = [];
+            const first = new SpellcheckerWasm(results => callbackTerms.push(results.map(item => item.term)));
+            const second = new SpellcheckerWasm();
+            await Promise.all([
+                first.prepareSpellchecker(wasmPath, dictionaryLocation),
+                second.prepareSpellchecker(wasmPath, dictionaryLocation),
+            ]);
+
+            assert.deepStrictEqual(first.suggest('helo').map(item => item.toJSON()),
+                [{ count: 100, distance: 1, term: 'hello' }]);
+            assert.deepStrictEqual(first.suggest('hello'), []);
+            assert.deepStrictEqual(first.suggest('helo').map(item => item.term), ['hello']);
+            assert.deepStrictEqual(callbackTerms, [['hello'], [], ['hello']]);
+            assert.deepStrictEqual(second.suggest('helo').map(item => item.term), ['hello']);
+            assert.deepStrictEqual(second.suggest('hello'), []);
+
+            const compound = second.suggestCompound('helo world');
+            assert.ok(compound.some(item => item.term === 'hello world'));
+            assert.deepStrictEqual(second.suggest('hello'), []);
+        } finally {
+            await rm(directory, { recursive: true, force: true });
+        }
+    });
+
+    it('keeps the outer result when a callback performs a nested lookup', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'spellchecker-wasm-63-'));
+        const dictionaryLocation = join(directory, 'dictionary.txt');
+        try {
+            await writeFile(dictionaryLocation, 'hello 100\r\n');
+            let nested: SuggestedItem[] | undefined;
+            let reentered = false;
+            const spellchecker = new SpellcheckerWasm(() => {
+                if (!reentered) {
+                    reentered = true;
+                    nested = spellchecker.suggest('zzzzzzzzzzzzzz');
+                }
+            });
+            await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation);
+            const outer = spellchecker.suggest('helo');
+            assert.deepStrictEqual(outer.map(item => item.term), ['hello']);
+            assert.deepStrictEqual(nested, []);
+        } finally {
+            await rm(directory, { recursive: true, force: true });
+        }
+    });
+
+    it('returns direct results through the browser Response loading path', async () => {
+        const wasm = new Response(new Uint8Array(await readFile(wasmPath)), {
+            headers: { 'Content-Type': 'application/wasm' },
+        });
+        const dictionary = new Response('hello 100\r\n');
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(wasm, dictionary);
+        assert.deepStrictEqual(spellchecker.suggest('helo').map(item => item.toJSON()),
+            [{ count: 100, distance: 1, term: 'hello' }]);
+        assert.deepStrictEqual(spellchecker.suggest('hello'), []);
+    });
+
+    it('blocks direct lookups while preparation is pending and after failed re-preparation', async () => {
+        const wasmBytes = new Uint8Array(await readFile(wasmPath));
+        const wasmResponse = () => new Response(wasmBytes.slice(), {
+            headers: { 'Content-Type': 'application/wasm' },
+        });
+        let startReading!: () => void;
+        const reading = new Promise<void>(resolve => { startReading = resolve; });
+        let dictionaryController!: ReadableStreamDefaultController<Uint8Array>;
+        const dictionary = new Response(new ReadableStream<Uint8Array>({
+            pull(controller) {
+                dictionaryController = controller;
+                startReading();
+            },
+        }));
+        const spellchecker = new SpellcheckerWasm();
+        const preparation = spellchecker.prepareSpellchecker(wasmResponse(), dictionary);
+        await reading;
+        assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
+        assert.throws(() => spellchecker.suggestCompound('helo world'), /Await prepareSpellchecker/);
+
+        dictionaryController.enqueue(new TextEncoder().encode('hello 100\r\n'));
+        dictionaryController.close();
+        await preparation;
+        assert.deepStrictEqual(spellchecker.suggest('helo').map(item => item.term), ['hello']);
+
+        const failedPreparation = spellchecker.prepareSpellchecker(wasmResponse(), new Response(null));
+        assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
+        await assert.rejects(failedPreparation, /Dictionary Response body is null/);
+        assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
+    });
+});
 
 // WordSegmentation improvements tests
 describe('SpellcheckerWasm - WordSegmentation improvements', () => {

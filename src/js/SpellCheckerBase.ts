@@ -74,15 +74,17 @@ export const defaultCheckSpellingOptions: CheckSpellingOptions = {
 export abstract class SpellcheckerBase {
     protected wasmSymSpell!: WasmSymSpell;
     protected writeBuffer!: Uint8Array;
+    protected prepared = false;
 
     /**
      * The handler set by the consumer to receive
      * suggested items from the wasm.
      */
-    public resultHandler: ResultsHandler;
+    public resultHandler?: ResultsHandler;
+    private readonly resultFrames: { results: SuggestedItem[] }[] = [];
 
     protected constructor(resultHandler?: ResultsHandler) {
-        this.resultHandler = resultHandler!;
+        this.resultHandler = resultHandler;
     }
 
     protected abstract encodeString(str: string): Uint8Array;
@@ -142,6 +144,11 @@ export abstract class SpellcheckerBase {
         lookup(0, encodedString.byteLength, options.verbosity, options.maxEditDistance, options.includeUnknown, options.includeSelf);
     }
 
+    /** Returns the suggestions for this word synchronously after preparation. */
+    public suggest(word: Uint8Array | string, options?: CheckSpellingOptions): SuggestedItem[] {
+        return this.captureResults(() => this.checkSpelling(word, options));
+    }
+
     /**
      * Performs a spelling check based on the supplied sentence and options.
      * The suggestions list will be provided to the resultHandler().
@@ -161,6 +168,25 @@ export abstract class SpellcheckerBase {
         lookup_compound(0, encodedString.byteLength, options.maxEditDistance);
     }
 
+    /** Returns the compound suggestions synchronously after preparation. */
+    public suggestCompound(sentence: Uint8Array | string, options?: Pick<CheckSpellingOptions, 'maxEditDistance'>): SuggestedItem[] {
+        return this.captureResults(() => this.checkSpellingCompound(sentence, options));
+    }
+
+    private captureResults(lookup: () => void): SuggestedItem[] {
+        if (!this.prepared) {
+            throw new Error('Spellchecker is not ready. Await prepareSpellchecker() before calling suggest or suggestCompound.');
+        }
+        const frame = { results: [] as SuggestedItem[] };
+        this.resultFrames.push(frame);
+        try {
+            lookup();
+            return frame.results;
+        } finally {
+            this.resultFrames.pop();
+        }
+    }
+
     /**
      * @internal
      *
@@ -172,7 +198,12 @@ export abstract class SpellcheckerBase {
      */
     protected resultTrap = (ptr: number, length: number): void => {
         const {memory} = this.wasmSymSpell;
-        this.resultHandler(deserializeSuggestedItems(memory.buffer, ptr, length));
+        const results = deserializeSuggestedItems(memory.buffer, ptr, length);
+        const frame = this.resultFrames[this.resultFrames.length - 1];
+        if (frame) {
+            frame.results = results;
+        }
+        this.resultHandler?.(results);
     };
 
     /**

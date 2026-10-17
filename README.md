@@ -36,97 +36,89 @@ Then use `spellcheck` to enter interactive mode. For supported arguments, run `s
 ```js
 // Within the preload script of your BrowserWindow instance
 const { webFrame } = require('electron');
-const { SpellcheckerWasm }  = require('spellchecker-wasm');
+const { dirname, join } = require('node:path');
 
-const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
-const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
-const spellchecker = new SpellcheckerWasm();
+(async () => {
+    const { SpellcheckerWasm } = await import('spellchecker-wasm');
+    const libDir = join(dirname(require.resolve('spellchecker-wasm')), '..');
+    const spellchecker = new SpellcheckerWasm();
+    await spellchecker.prepareSpellchecker(
+        join(libDir, 'spellchecker-wasm.wasm'),
+        join(libDir, 'frequency_dictionary_en_82_765.txt')
+    );
 
-spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation)
-    .then(() => {
-        let suggestions;
-        spellchecker.resultsHandler = results => {
-            suggestions = results;
-        };
-
-        webFrame.setSpellCheckProvider('en-US', {
-            spellCheck(words, callback) {
-                const misspelledWords = [];
-                words.forEach(word => {
-                    spellchecker.checkSpelling(word); // synchronous
-                    if (suggestions.length) {
-                        misspelledWords.push(word);
-                    }
-                });
-                callback(misspelledWords);
-            }
-        })
-    })
+    webFrame.setSpellCheckProvider('en-US', {
+        spellCheck(words, callback) {
+            const misspelledWords = words.filter(word => spellchecker.suggest(word).length > 0);
+            callback(misspelledWords);
+        }
+    });
+})();
 ```
 
 ## Usage in Node
 ```typescript
 import { SpellcheckerWasm } from 'spellchecker-wasm';
-const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
-const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const libDir = join(dirname(fileURLToPath(import.meta.resolve('spellchecker-wasm'))), '..');
+const wasmPath = join(libDir, 'spellchecker-wasm.wasm');
+const dictionaryLocation = join(libDir, 'frequency_dictionary_en_82_765.txt');
 // Optional bigram support for compound lookups - add only when needed
-const bigramLocation = require.resolve('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt');
+const bigramLocation = join(libDir, 'frequency_bigramdictionary_en_243_342.txt');
 
-const spellchecker = new SpellcheckerWasm(resultHandler);
-spellChecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation)
-    .then(() => {
-        ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(word => spellchecker.checkSpelling(word));
-        spellchecker.checkSpellingCompound('tiss cheks th entir sentance')
-    });
-
-function resultHandler(results) {
-    // Results are given in the same order they are sent.
-    // The most relevant results are order lower in the results index.
-    process.stdout.write(results.map(r => r.term));
+const spellchecker = new SpellcheckerWasm();
+await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
+for (const word of ['tiss', 'gves', 'practiclly']) {
+    console.log(word, spellchecker.suggest(word).map(item => item.term));
 }
+console.log(spellchecker.suggestCompound('tiss cheks th entir sentance'));
 ```
 
+Preparation is asynchronous. Once it completes, `suggest` and `suggestCompound`
+return results synchronously for the supplied input. The existing
+`checkSpelling` and `checkSpellingCompound` methods still call an optional
+`resultHandler` synchronously and return `void`.
+
 ## Usage as a Node Worker
-```typescript
-const { SpellcheckerWasm } = require('../lib/nodejs/SpellcheckerWasm.js');
+```js
+// spellchecker-worker.mjs
+import { parentPort } from 'node:worker_threads';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { SpellcheckerWasm } from 'spellchecker-wasm';
 
-const wasmPath = require.resolve('spellchecker-wasm/lib/spellchecker-wasm.wasm');
-const dictionaryLocation = require.resolve('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
-// Optional bigram support for compound lookups - add only when needed
-const bigramLocation = require.resolve('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt');
-
-let resultHandler = (results) => {process.stdout.write(results.map(r => r.term) + '\n');};
-let spellcheckerWasm = new SpellcheckerWasm(resultHandler);
-spellcheckerWasm.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation)
-    .then(() => {
-        process.stdout.write('Ready\n');
-        process.stdin.on('data', data => {
-            spellcheckerWasm.checkSpelling('' + data);
-        });
-    })
-    .catch((e) => {
-        process.stdout.write(`Error initializing the SpellChecker\n${e}\n`);
-    });
+const libDir = join(dirname(fileURLToPath(import.meta.resolve('spellchecker-wasm'))), '..');
+const spellchecker = new SpellcheckerWasm();
+await spellchecker.prepareSpellchecker(
+    join(libDir, 'spellchecker-wasm.wasm'),
+    join(libDir, 'frequency_dictionary_en_82_765.txt')
+);
+parentPort.on('message', word => {
+    parentPort.postMessage(spellchecker.suggest(word).map(item => item.toJSON()));
+});
 ```
 ## Usage in the Browser
 ```js
-import { SpellcheckerWasm } from 'spellchecker-wasm/lib/browser/index.js';
-
-let resultHandler = (results) => console.log("Results : ", results.map(result => result.term));
+// Serve the package's lib directory at /spellchecker-wasm/lib/.
+import { SpellcheckerWasm } from '/spellchecker-wasm/lib/esm/index.js';
 
 async function initializeSpellchecker() {
-    const wasm = await fetch('spellchecker-wasm/lib/spellchecker-wasm.wasm');
-    const dictionary = await fetch('spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
-    const bigramLocation = await fetch('spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt'); // Optional
+    const wasm = await fetch('/spellchecker-wasm/lib/spellchecker-wasm.wasm');
+    const dictionary = await fetch('/spellchecker-wasm/lib/frequency_dictionary_en_82_765.txt');
+    const bigramLocation = await fetch('/spellchecker-wasm/lib/frequency_bigramdictionary_en_243_342.txt'); // Optional
 
-    const spellchecker = new SpellcheckerWasm(resultHandler);
+    const spellchecker = new SpellcheckerWasm();
     await spellchecker.prepareSpellchecker(wasm, dictionary, bigramLocation);
     return spellchecker;
 }
 
 initializeSpellchecker().then(spellchecker => {
-    ['tiss', 'gves', 'practiclly', 'instent', 'relevent', 'resuts'].forEach(word => spellchecker.checkSpelling(word));
-    spellchecker.checkSpellingCompound('tiss cheks th entir sentance');
+    for (const word of ['tiss', 'gves', 'practiclly']) {
+        console.log(word, spellchecker.suggest(word).map(item => item.term));
+    }
+    console.log(spellchecker.suggestCompound('tiss cheks th entir sentance'));
 });
 ```
 ## Common use cases
