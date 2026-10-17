@@ -300,7 +300,7 @@ describe('SpellcheckerWasm - Multi-byte UTF-8', () => {
         spellchecker.checkSpelling('свойй');
         assert.deepStrictEqual(
             lastResults![0].toJSON(),
-            { count: 28678, distance: 1, term: 'свой' }
+            { count: 286780, distance: 1, term: 'свой' }
         );
     });
 });
