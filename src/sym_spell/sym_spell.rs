@@ -322,11 +322,12 @@ impl SymSpell {
         // used to construct the underlying dictionary structure.
         assert!(max_edit_distance <= self.dictionary_edit_distance);
         let mut suggestions = vec![];
+        let input_is_known = self.words.contains_key(input);
         let input_gc = GraphemeClusters::new(input);
         let input_len = input_gc.len();
 
         let end = |mut suggestions: Vec<SuggestItem>| -> Vec<SuggestItem> {
-            if include_unknown && suggestions.is_empty() {
+            if include_unknown && !input_is_known && suggestions.is_empty() {
                 suggestions.push(SuggestItem::new(
                     String::from(input),
                     max_edit_distance + 1,
@@ -344,7 +345,7 @@ impl SymSpell {
         }
 
         // quick look for exact match
-        if self.words.contains_key(input) {
+        if input_is_known {
             // early exit - return exact match, unless caller wants all matches
             if include_self {
                 suggestions.push(SuggestItem::new(String::from(input), 0, self.words[input]));

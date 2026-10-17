@@ -156,6 +156,12 @@ spellchecker.checkSpelling('thereeeee', {
 });
 // lastResults.length === 1
 ```
+`includeUnknown` returns the input with count `0` and distance `maxEditDistance + 1`
+only when the input is absent from the dictionary and no correction is found.
+If the input is known, `includeSelf: false` suppresses that exact match even when
+`includeUnknown: true`. With `verbosity: 2` (`All`), other dictionary matches
+within the edit distance may still be returned.
+
 ### Allowing for deeper word searches
 Given that the default `maxEditDistance`, which controls up to which edit distance words from the dictionary should be treated as suggestions, is 2, words such as `cofvvvfee` will not return suggestions.
 

@@ -68,6 +68,70 @@ mod tests {
     }
 
     #[test]
+    fn include_unknown_only_returns_words_missing_from_dictionary() {
+        let mut sym_spell = SymSpell::new(Some(2), Some(7), Some(1));
+        sym_spell.create_dictionary_entry("eradicate".to_string(), 42);
+        sym_spell.create_dictionary_entry("eradicated".to_string(), 7);
+
+        for all in [false, true] {
+            for include_unknown in [false, true] {
+                for include_self in [false, true] {
+                    let known = sym_spell.lookup(
+                        "eradicate",
+                        if all {
+                            Verbosity::All
+                        } else {
+                            Verbosity::Closest
+                        },
+                        2,
+                        include_unknown,
+                        include_self,
+                    );
+                    let known_actual: Vec<(&str, usize, usize)> = known
+                        .iter()
+                        .map(|item| (item.term.as_str(), item.count, item.distance))
+                        .collect();
+                    let expected = match (all, include_self) {
+                        (false, false) => vec![],
+                        (false, true) => vec![("eradicate", 42, 0)],
+                        (true, false) => vec![("eradicated", 7, 1)],
+                        (true, true) => vec![("eradicated", 7, 1), ("eradicate", 42, 0)],
+                    };
+                    assert_eq!(
+                        known_actual, expected,
+                        "known word, all={all}, unknown={include_unknown}, self={include_self}"
+                    );
+
+                    let unknown = sym_spell.lookup(
+                        "zzzzzzzzzzzzzz",
+                        if all {
+                            Verbosity::All
+                        } else {
+                            Verbosity::Closest
+                        },
+                        2,
+                        include_unknown,
+                        include_self,
+                    );
+                    let unknown_actual: Vec<(&str, usize, usize)> = unknown
+                        .iter()
+                        .map(|item| (item.term.as_str(), item.count, item.distance))
+                        .collect();
+                    let expected = if include_unknown {
+                        vec![("zzzzzzzzzzzzzz", 0, 3)]
+                    } else {
+                        vec![]
+                    };
+                    assert_eq!(
+                        unknown_actual, expected,
+                        "unknown word, all={all}, unknown={include_unknown}, self={include_self}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn word_segmentation_empty_part_fix() {
         // v6.7.2 fix: Ensure empty parts don't cause access errors
         let mut sym_spell = SymSpell::new(Some(2), Some(7), Some(1));
