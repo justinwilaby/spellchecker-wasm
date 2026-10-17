@@ -42,8 +42,9 @@ export class SpellcheckerWasm extends SpellcheckerBase {
         dictionaryLocation: string | Response,
         bigramLocation?: string | Response,
         options: Partial<SymSpellOptions> = defaultOptions): Promise<void> {
-
+        this.prepared = false;
         this.dictionaryEditDistance = undefined;
+
         const resolvedOptions = {...defaultOptions, ...options};
         for (const key of ['dictionaryEditDistance', 'countThreshold'] as const) {
             if (!Number.isSafeInteger(resolvedOptions[key]) || resolvedOptions[key] < 0 || resolvedOptions[key] > 0xffffffff) {
@@ -111,6 +112,8 @@ export class SpellcheckerWasm extends SpellcheckerBase {
         if (bigramLocation) {
             await this.loadDictionary(bigramLocation, memory, write_to_dictionary, newline, true);
         }
+
+        this.prepared = true;
         this.dictionaryEditDistance = resolvedOptions.dictionaryEditDistance;
     }
 

@@ -40,12 +40,14 @@ export declare const defaultCheckSpellingOptions: CheckSpellingOptions;
 export declare abstract class SpellcheckerBase {
     protected wasmSymSpell: WasmSymSpell;
     protected writeBuffer: Uint8Array;
+    protected prepared: boolean;
     protected dictionaryEditDistance?: number;
     /**
      * The handler set by the consumer to receive
      * suggested items from the wasm.
      */
-    resultHandler: ResultsHandler;
+    resultHandler?: ResultsHandler;
+    private readonly resultFrames;
     protected constructor(resultHandler?: ResultsHandler);
     protected abstract encodeString(str: string): Uint8Array;
     /**
@@ -79,6 +81,8 @@ export declare abstract class SpellcheckerBase {
      * @param options CheckSpellingOptions The options to use for this spell check lookup
      */
     checkSpelling(word: Uint8Array | string, options?: Partial<CheckSpellingOptions>): void;
+    /** Returns the suggestions for this word synchronously after preparation. */
+    suggest(word: Uint8Array | string, options?: CheckSpellingOptions): SuggestedItem[];
     /**
      * Performs a spelling check based on the supplied sentence and options.
      * The suggestions list will be provided to the resultHandler().
@@ -88,6 +92,9 @@ export declare abstract class SpellcheckerBase {
      */
     checkSpellingCompound(sentence: Uint8Array | string, options?: Partial<Pick<CheckSpellingOptions, 'maxEditDistance'>>): void;
     protected validateLookupDistance(distance: number): void;
+    /** Returns the compound suggestions synchronously after preparation. */
+    suggestCompound(sentence: Uint8Array | string, options?: Pick<CheckSpellingOptions, 'maxEditDistance'>): SuggestedItem[];
+    private captureResults;
     /**
      * @internal
      *
@@ -95,7 +102,7 @@ export declare abstract class SpellcheckerBase {
      * their respective SuggestedItem instances.
      *
      * @param ptr number The pointer in memory where this result set is located
-     * @param length number The number of total bytes in the set
+     * @param length number The number of total bytes in the result set
      */
     protected resultTrap: (ptr: number, length: number) => void;
     /**

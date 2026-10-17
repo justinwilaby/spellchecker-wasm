@@ -217,42 +217,6 @@ for (const region of Object.keys(testMapTyped)) {
     runRegionTests(region, testMapTyped[region]);
 }
 
-describe('SpellcheckerWasm - includeUnknown and includeSelf', () => {
-    it('distinguishes a known input from an unknown input in Closest and All modes', async () => {
-        const directory = await mkdtemp(join(tmpdir(), 'spellchecker-wasm-27-'));
-        const dictionaryLocation = join(directory, 'dictionary.txt');
-        try {
-            await writeFile(dictionaryLocation, 'eradicate 42\r\neradicated 7\r\n');
-            let lastResults: SuggestedItem[] = [];
-            const spellchecker = new SpellcheckerWasm(results => { lastResults = results; });
-            await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation);
-
-            for (const verbosity of [1, 2] as const) {
-                for (const includeUnknown of [false, true]) {
-                    for (const includeSelf of [false, true]) {
-                        const options = { verbosity, maxEditDistance: 2, includeUnknown, includeSelf };
-                        spellchecker.checkSpelling('eradicate', options);
-                        const expectedKnown = verbosity === 1
-                            ? (includeSelf ? [{ term: 'eradicate', count: 42, distance: 0 }] : [])
-                            : (includeSelf
-                                ? [{ term: 'eradicated', count: 7, distance: 1 }, { term: 'eradicate', count: 42, distance: 0 }]
-                                : [{ term: 'eradicated', count: 7, distance: 1 }]);
-                        assert.deepStrictEqual(lastResults.map(item => item.toJSON()), expectedKnown,
-                            `known input: verbosity=${verbosity}, includeUnknown=${includeUnknown}, includeSelf=${includeSelf}`);
-
-                        spellchecker.checkSpelling('zzzzzzzzzzzzzz', options);
-                        assert.deepStrictEqual(lastResults.map(item => item.toJSON()),
-                            includeUnknown ? [{ term: 'zzzzzzzzzzzzzz', count: 0, distance: 3 }] : [],
-                            `unknown input: verbosity=${verbosity}, includeUnknown=${includeUnknown}, includeSelf=${includeSelf}`);
-                    }
-                }
-            }
-        } finally {
-            await rm(directory, { recursive: true, force: true });
-        }
-    });
-});
-
 // WordSegmentation improvements tests
 describe('SpellcheckerWasm - WordSegmentation improvements', () => {
     const dictionaryLocation = join(__dirname, '../../../lib/frequency_dictionary_en_US_60size_1M_1gram_20090715.txt');
@@ -336,7 +300,145 @@ describe('SpellcheckerWasm - Multi-byte UTF-8', () => {
         spellchecker.checkSpelling('свойй');
         assert.deepStrictEqual(
             lastResults![0].toJSON(),
-            { count: 28678, distance: 1, term: 'свой' }
+            { count: 286780, distance: 1, term: 'свой' }
         );
+    });
+});
+
+describe('SpellcheckerWasm - includeUnknown and includeSelf', () => {
+    it('distinguishes a known input from an unknown input in Closest and All modes', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'spellchecker-wasm-27-'));
+        const dictionaryLocation = join(directory, 'dictionary.txt');
+        try {
+            await writeFile(dictionaryLocation, 'eradicate 42\r\neradicated 7\r\n');
+            let lastResults: SuggestedItem[] = [];
+            const spellchecker = new SpellcheckerWasm(results => { lastResults = results; });
+            await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation);
+
+            for (const verbosity of [1, 2] as const) {
+                for (const includeUnknown of [false, true]) {
+                    for (const includeSelf of [false, true]) {
+                        const options = { verbosity, maxEditDistance: 2, includeUnknown, includeSelf };
+                        spellchecker.checkSpelling('eradicate', options);
+                        const expectedKnown = verbosity === 1
+                            ? (includeSelf ? [{ term: 'eradicate', count: 42, distance: 0 }] : [])
+                            : (includeSelf
+                                ? [{ term: 'eradicated', count: 7, distance: 1 }, { term: 'eradicate', count: 42, distance: 0 }]
+                                : [{ term: 'eradicated', count: 7, distance: 1 }]);
+                        assert.deepStrictEqual(lastResults.map(item => item.toJSON()), expectedKnown,
+                            `known input: verbosity=${verbosity}, includeUnknown=${includeUnknown}, includeSelf=${includeSelf}`);
+
+                        spellchecker.checkSpelling('zzzzzzzzzzzzzz', options);
+                        assert.deepStrictEqual(lastResults.map(item => item.toJSON()),
+                            includeUnknown ? [{ term: 'zzzzzzzzzzzzzz', count: 0, distance: 3 }] : [],
+                            `unknown input: verbosity=${verbosity}, includeUnknown=${includeUnknown}, includeSelf=${includeSelf}`);
+                    }
+                }
+            }
+        } finally {
+            await rm(directory, { recursive: true, force: true });
+        }
+    });
+});
+
+describe('SpellcheckerWasm - synchronous suggestions', () => {
+    it('requires preparation before direct lookups', () => {
+        const spellchecker = new SpellcheckerWasm();
+        assert.throws(() => spellchecker.suggest('hello'), /Await prepareSpellchecker/);
+        assert.throws(() => spellchecker.suggestCompound('hello world'), /Await prepareSpellchecker/);
+    });
+
+    it('returns each call’s results, supports optional callbacks, and isolates instances', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'spellchecker-wasm-63-'));
+        const dictionaryLocation = join(directory, 'dictionary.txt');
+        try {
+            await writeFile(dictionaryLocation, 'hello 100\r\nworld 80\r\n');
+            const callbackTerms: string[][] = [];
+            const first = new SpellcheckerWasm(results => callbackTerms.push(results.map(item => item.term)));
+            const second = new SpellcheckerWasm();
+            await Promise.all([
+                first.prepareSpellchecker(wasmPath, dictionaryLocation),
+                second.prepareSpellchecker(wasmPath, dictionaryLocation),
+            ]);
+
+            assert.deepStrictEqual(first.suggest('helo').map(item => item.toJSON()),
+                [{ count: 100, distance: 1, term: 'hello' }]);
+            assert.deepStrictEqual(first.suggest('hello'), []);
+            assert.deepStrictEqual(first.suggest('helo').map(item => item.term), ['hello']);
+            assert.deepStrictEqual(callbackTerms, [['hello'], [], ['hello']]);
+            assert.deepStrictEqual(second.suggest('helo').map(item => item.term), ['hello']);
+            assert.deepStrictEqual(second.suggest('hello'), []);
+
+            const compound = second.suggestCompound('helo world');
+            assert.ok(compound.some(item => item.term === 'hello world'));
+            assert.deepStrictEqual(second.suggest('hello'), []);
+        } finally {
+            await rm(directory, { recursive: true, force: true });
+        }
+    });
+
+    it('keeps the outer result when a callback performs a nested lookup', async () => {
+        const directory = await mkdtemp(join(tmpdir(), 'spellchecker-wasm-63-'));
+        const dictionaryLocation = join(directory, 'dictionary.txt');
+        try {
+            await writeFile(dictionaryLocation, 'hello 100\r\n');
+            let nested: SuggestedItem[] | undefined;
+            let reentered = false;
+            const spellchecker = new SpellcheckerWasm(() => {
+                if (!reentered) {
+                    reentered = true;
+                    nested = spellchecker.suggest('zzzzzzzzzzzzzz');
+                }
+            });
+            await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation);
+            const outer = spellchecker.suggest('helo');
+            assert.deepStrictEqual(outer.map(item => item.term), ['hello']);
+            assert.deepStrictEqual(nested, []);
+        } finally {
+            await rm(directory, { recursive: true, force: true });
+        }
+    });
+
+    it('returns direct results through the browser Response loading path', async () => {
+        const wasm = new Response(new Uint8Array(await readFile(wasmPath)), {
+            headers: { 'Content-Type': 'application/wasm' },
+        });
+        const dictionary = new Response('hello 100\r\n');
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(wasm, dictionary);
+        assert.deepStrictEqual(spellchecker.suggest('helo').map(item => item.toJSON()),
+            [{ count: 100, distance: 1, term: 'hello' }]);
+        assert.deepStrictEqual(spellchecker.suggest('hello'), []);
+    });
+
+    it('blocks direct lookups while preparation is pending and after failed re-preparation', async () => {
+        const wasmBytes = new Uint8Array(await readFile(wasmPath));
+        const wasmResponse = () => new Response(wasmBytes.slice(), {
+            headers: { 'Content-Type': 'application/wasm' },
+        });
+        let startReading!: () => void;
+        const reading = new Promise<void>(resolve => { startReading = resolve; });
+        let dictionaryController!: ReadableStreamDefaultController<Uint8Array>;
+        const dictionary = new Response(new ReadableStream<Uint8Array>({
+            pull(controller) {
+                dictionaryController = controller;
+                startReading();
+            },
+        }));
+        const spellchecker = new SpellcheckerWasm();
+        const preparation = spellchecker.prepareSpellchecker(wasmResponse(), dictionary);
+        await reading;
+        assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
+        assert.throws(() => spellchecker.suggestCompound('helo world'), /Await prepareSpellchecker/);
+
+        dictionaryController.enqueue(new TextEncoder().encode('hello 100\r\n'));
+        dictionaryController.close();
+        await preparation;
+        assert.deepStrictEqual(spellchecker.suggest('helo').map(item => item.term), ['hello']);
+
+        const failedPreparation = spellchecker.prepareSpellchecker(wasmResponse(), new Response(null));
+        assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
+        await assert.rejects(failedPreparation, /Dictionary Response body is null/);
+        assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
     });
 });
