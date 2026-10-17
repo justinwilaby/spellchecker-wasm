@@ -215,6 +215,76 @@ for (const region of Object.keys(testMapTyped)) {
     runRegionTests(region, testMapTyped[region]);
 }
 
+// WordSegmentation improvements tests
+describe('SpellcheckerWasm - WordSegmentation improvements', () => {
+    const dictionaryLocation = join(__dirname, '../../../lib/frequency_dictionary_en_US_60size_1M_1gram_20090715.txt');
+    const bigramLocation = join(__dirname, '../../../lib/frequency_bigramdictionary_en_243_342.txt');
+
+    it('should remove hyphens during compound lookup', { timeout: 30000 }, async () => {
+        let lastResults: SuggestedItem[];
+        const resultsHandler: ResultsHandler = (results) => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
+        spellchecker.checkSpellingCompound('hel-lo world');
+
+        const terms = lastResults!.map(r => r.term);
+        assert.ok(
+            terms.includes('hello world'),
+            `Expected "hello world" in results, got: ${terms.join(', ')}`
+        );
+    });
+
+    it('should handle case-insensitive compound lookup', { timeout: 30000 }, async () => {
+        let lastResults: SuggestedItem[];
+        const resultsHandler: ResultsHandler = (results) => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
+        // Uppercase correct words pass through unchanged (case handling works)
+        spellchecker.checkSpellingCompound('HELLO WORLD');
+
+        assert.ok(lastResults !== undefined, 'Expected results for uppercase input');
+        assert.ok(lastResults!.length > 0, 'Expected non-empty results for uppercase input');
+    });
+
+    it('should handle punctuation in compound lookup', { timeout: 30000 }, async () => {
+        let lastResults: SuggestedItem[];
+        const resultsHandler: ResultsHandler = (results) => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
+        spellchecker.checkSpellingCompound('hello,world');
+
+        assert.ok(lastResults !== undefined, 'Expected results for punctuated input');
+        assert.ok(lastResults!.length > 0, 'Expected non-empty results for punctuated input');
+    });
+
+    it('should normalize ligatures during compound lookup', { timeout: 30000 }, async () => {
+        let lastResults: SuggestedItem[];
+        const resultsHandler: ResultsHandler = (results) => {
+            lastResults = results;
+        };
+        const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+        await spellchecker.prepareSpellchecker(wasmPath, dictionaryLocation, bigramLocation);
+        // "scientiﬁc" with ﬁ ligature (U+FB01)
+        spellchecker.checkSpellingCompound('scienti\uFB01c');
+
+        const terms = lastResults!.map(r => r.term);
+        assert.ok(
+            terms.includes('scientific'),
+            `Expected "scientific" in results, got: ${terms.join(', ')}`
+        );
+    });
+});
+
 // Multi-byte UTF-8 tests
 describe('SpellcheckerWasm - Multi-byte UTF-8', () => {
     it('should support dictionaries in other languages with UTF-8 characters', { timeout: 30000 }, async () => {
