@@ -5,6 +5,7 @@ import type { ResultsHandler } from '../SpellCheckerBase.ts';
 import type { SuggestedItem } from '../SuggestedItem.ts';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import testMap from './language_tests_map.json' with { type: 'json' };
 
 interface RegionConfig {
@@ -21,6 +22,81 @@ const testMapTyped = testMap as Record<string, RegionConfig>;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const wasmPath = join(__dirname, '../../../lib/spellchecker-wasm.wasm');
 const russianDictionaryLocation = join(__dirname, './small_dictionary_ru.txt');
+
+describe('distance validation and streamed dictionaries', () => {
+    const dictionary = join(__dirname, '../../../lib/frequency_dictionary_en_82_765.txt');
+
+    it('rejects invalid preparation and lookup distances before WASM', {timeout: 30000}, async () => {
+        const spellchecker = new SpellcheckerWasm(() => {});
+        for (const value of [-1, 1.5, NaN, Infinity, 2 ** 32]) {
+            await assert.rejects(spellchecker.prepareSpellchecker(wasmPath, dictionary, undefined,
+                {dictionaryEditDistance: value}), RangeError);
+        }
+        await assert.rejects(spellchecker.prepareSpellchecker(wasmPath, dictionary, undefined,
+            {countThreshold: -1}), RangeError);
+        await assert.rejects(spellchecker.prepareSpellchecker(wasmPath, dictionary, undefined,
+            {countThreshold: 2 ** 32}), RangeError);
+        await spellchecker.prepareSpellchecker(wasmPath, dictionary, undefined,
+            {countThreshold: 1});
+        for (const value of [-1, 1.5, NaN, Infinity, 3, 2 ** 32]) {
+            assert.throws(() => spellchecker.checkSpelling('hello', {maxEditDistance: value}), RangeError);
+            assert.throws(() => spellchecker.checkSpellingCompound('hello world', {maxEditDistance: value}), RangeError);
+        }
+        assert.doesNotThrow(() => spellchecker.checkSpelling('hello', {maxEditDistance: 0}));
+        assert.doesNotThrow(() => spellchecker.checkSpellingCompound('hello world', {maxEditDistance: 0}));
+        assert.throws(() => spellchecker.writeToDictionary(new Uint8Array([0xff, 10])),
+            /Dictionary contains invalid UTF-8/);
+    });
+
+    it('prepares from chunked browser-style Responses with LF and CRLF lines', async () => {
+        const wasm = new Response(await readFile(wasmPath), {headers: {'Content-Type': 'application/wasm'}});
+        const bytes = new TextEncoder().encode('hello 100\n\nworld 90\r\nand 12997637966\n');
+        const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+                for (let i = 0; i < bytes.length; i += 3) controller.enqueue(bytes.slice(i, i + 3));
+                controller.close();
+            }
+        });
+        let results: SuggestedItem[] = [];
+        const spellchecker = new SpellcheckerWasm(items => { results = items; });
+        await spellchecker.prepareSpellchecker(wasm, new Response(stream));
+        spellchecker.checkSpelling('hello', {maxEditDistance: 0, includeSelf: true});
+        assert.equal(results[0]?.term, 'hello');
+        spellchecker.checkSpelling('world', {maxEditDistance: 0, includeSelf: true});
+        assert.equal(results[0]?.term, 'world');
+        spellchecker.checkSpelling('and', {maxEditDistance: 0, includeSelf: true});
+        assert.equal(results[0]?.count, 4294967295);
+    });
+
+    it('rejects a failed dictionary Response rather than reporting prepared', async () => {
+        const wasm = new Response(await readFile(wasmPath), {headers: {'Content-Type': 'application/wasm'}});
+        const dictionary = new Response(new ReadableStream({
+            pull(controller) { controller.error(new Error('truncated dictionary response')); }
+        }));
+        const spellchecker = new SpellcheckerWasm(() => {});
+        await assert.rejects(spellchecker.prepareSpellchecker(wasm, dictionary), /truncated dictionary response/);
+        assert.throws(() => spellchecker.checkSpelling('hello'), /Call prepareSpellchecker/);
+    });
+
+    it('rejects unsuccessful, incomplete, and malformed Responses', async () => {
+        const wasmBytes = await readFile(wasmPath);
+        const wasm = () => new Response(wasmBytes, {headers: {'Content-Type': 'application/wasm'}});
+        const checker = new SpellcheckerWasm(() => {});
+        await assert.rejects(checker.prepareSpellchecker(
+            new Response('Not found', {status: 404}), new Response('hello 10\n')),
+            /WASM Response failed: 404/);
+        await assert.rejects(checker.prepareSpellchecker(
+            wasm(), new Response('Not found', {status: 404})),
+            /Dictionary Response failed: 404/);
+        await assert.rejects(checker.prepareSpellchecker(
+            wasm(), new Response('hello 10\n', {headers: {'Content-Length': '100'}})),
+            /Dictionary Response is incomplete/);
+        await assert.rejects(checker.prepareSpellchecker(
+            wasm(), new Response(new Uint8Array([0xff, 10]))),
+            /Dictionary contains invalid UTF-8/);
+        assert.throws(() => checker.checkSpelling('hello'), /Call prepareSpellchecker/);
+    });
+});
 
 type CommonMisspelling = { correctSpelling: string; misspellings: string[] };
 
@@ -98,8 +174,7 @@ async function runRegionTests(region: string, regionConfig: RegionConfig) {
                 {
                     count: 0,
                     distance: 5,
-                    term:
-                        'beginning sentences with misspelled words is outrageous and mischievous',
+                    term: 'beginning sentences with misspelled words is outrageous and mischievous',
                 }
             );
         });
@@ -298,7 +373,7 @@ describe('SpellcheckerWasm - Multi-byte UTF-8', () => {
         spellchecker.checkSpelling('свойй');
         assert.deepStrictEqual(
             lastResults![0].toJSON(),
-            { count: 28678, distance: 1, term: 'свой' }
+            { count: 286780, distance: 1, term: 'свой' }
         );
     });
 });

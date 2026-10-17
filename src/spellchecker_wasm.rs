@@ -25,20 +25,28 @@ pub unsafe extern "C" fn symspell(max_dictionary_edit_distance: usize, count_thr
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn write_to_dictionary(ptr: *const u8, length: usize, is_bigram: bool) {
+pub unsafe extern "C" fn write_to_dictionary(ptr: *const u8, length: usize, is_bigram: bool) -> bool {
     let buffer_cell = BUFFER.as_ref().unwrap();
     let sym_cell = SYM.as_ref().unwrap();
     let mut sym = sym_cell.borrow_mut();
     let mut buffer = buffer_cell.borrow_mut();
     buffer.extend_from_slice(slice::from_raw_parts(ptr, length));
 
+    consume_dictionary_lines(&mut buffer, &mut sym, is_bigram)
+}
+
+fn consume_dictionary_lines(buffer: &mut Vec<u8>, sym: &mut SymSpell, is_bigram: bool) -> bool {
     let len = buffer.len();
     let mut cursor: usize = 0;
     for i in 0..len {
         let ch = buffer[i];
         if ch == b'\n' {
-            if i > 1 {
-                let chunk = str::from_utf8_unchecked(&buffer[cursor..i - 1]); // do not write the '\n' char
+            let end = if i > cursor && buffer[i - 1] == b'\r' { i - 1 } else { i };
+            if end > cursor {
+                let chunk = match str::from_utf8(&buffer[cursor..end]) {
+                    Ok(chunk) => chunk,
+                    Err(_) => return false,
+                };
                 if is_bigram {
                     sym.write_line_to_bigram_dictionary(chunk, " ");
                 } else {
@@ -50,6 +58,47 @@ pub unsafe extern "C" fn write_to_dictionary(ptr: *const u8, length: usize, is_b
     }
 
     buffer.drain(0..cursor);
+    true
+}
+
+#[cfg(test)]
+mod dictionary_stream_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_lf_crlf_blank_lines_and_split_utf8() {
+        let mut sym = SymSpell::new(Some(2), Some(7), Some(1));
+        let mut buffer = Vec::new();
+        buffer.extend_from_slice(b"hello 10\n");
+        assert!(consume_dictionary_lines(&mut buffer, &mut sym, false));
+        buffer.extend_from_slice(b"\nworld 20\r\n\r\n");
+        assert!(consume_dictionary_lines(&mut buffer, &mut sym, false));
+        assert!(buffer.is_empty());
+        let russian = "слово 30\n".as_bytes();
+        buffer.extend_from_slice(&russian[..3]);
+        assert!(consume_dictionary_lines(&mut buffer, &mut sym, false));
+        buffer.extend_from_slice(&russian[3..]);
+        assert!(consume_dictionary_lines(&mut buffer, &mut sym, false));
+        for (term, count) in [("hello", 10), ("world", 20), ("слово", 30)] {
+            assert_eq!(sym.lookup(term, Verbosity::Top, 0, false, true)[0].count, count, "{}", term);
+        }
+    }
+
+    #[test]
+    fn malformed_utf8_does_not_enter_dictionary() {
+        let mut sym = SymSpell::new(Some(2), Some(7), Some(1));
+        let mut buffer = b"bad\xff 10\nvalid 20\n".to_vec();
+        assert!(!consume_dictionary_lines(&mut buffer, &mut sym, false));
+        assert!(sym.lookup("valid", Verbosity::Top, 0, false, true).is_empty());
+    }
+
+    #[test]
+    fn large_source_count_saturates_to_wire_limit() {
+        let mut sym = SymSpell::new(Some(2), Some(7), Some(1));
+        let mut buffer = b"and 12997637966\n".to_vec();
+        assert!(consume_dictionary_lines(&mut buffer, &mut sym, false));
+        assert_eq!(sym.lookup("and", Verbosity::Top, 0, false, true)[0].count, u32::MAX as usize);
+    }
 }
 
 #[no_mangle]

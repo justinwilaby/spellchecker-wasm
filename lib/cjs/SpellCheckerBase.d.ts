@@ -4,7 +4,7 @@ export interface WasmSymSpell extends WebAssembly.Exports {
     symspell: (dictionaryEditDistance: number, countThreshold: number) => void;
     lookup: (ptr: number, length: number, verbosity: Verbosity, maxEditDistance: number, includeUnknowns: boolean, includeSelf: boolean) => void;
     lookup_compound: (ptr: number, length: number, maxEditDistance: number) => void;
-    write_to_dictionary: (prt: number, length: number, isBigram: boolean) => void;
+    write_to_dictionary: (prt: number, length: number, isBigram: boolean) => boolean;
 }
 export declare const Verbosity: {
     readonly Top: 0;
@@ -40,6 +40,7 @@ export declare const defaultCheckSpellingOptions: CheckSpellingOptions;
 export declare abstract class SpellcheckerBase {
     protected wasmSymSpell: WasmSymSpell;
     protected writeBuffer: Uint8Array;
+    protected dictionaryEditDistance?: number;
     /**
      * The handler set by the consumer to receive
      * suggested items from the wasm.
@@ -68,8 +69,8 @@ export declare abstract class SpellcheckerBase {
      * @param bigramLocation
      * @param options
      */
-    abstract prepareSpellchecker(wasmLocation: string, dictionaryLocation: string, bigramLocation?: string, options?: SymSpellOptions): Promise<void>;
-    abstract prepareSpellchecker(wasFetchResponse: Response, dictionaryFetchResponse: Response, bigramFetchResponse?: Response, options?: SymSpellOptions): Promise<void>;
+    abstract prepareSpellchecker(wasmLocation: string, dictionaryLocation: string, bigramLocation?: string, options?: Partial<SymSpellOptions>): Promise<void>;
+    abstract prepareSpellchecker(wasFetchResponse: Response, dictionaryFetchResponse: Response, bigramFetchResponse?: Response, options?: Partial<SymSpellOptions>): Promise<void>;
     /**
      * Performs a single spelling check based on the supplied word and options.
      * The suggestions list will be provided to the resultHandler().
@@ -77,7 +78,7 @@ export declare abstract class SpellcheckerBase {
      * @param word string The word to perform spell checking on.
      * @param options CheckSpellingOptions The options to use for this spell check lookup
      */
-    checkSpelling(word: Uint8Array | string, options?: CheckSpellingOptions): void;
+    checkSpelling(word: Uint8Array | string, options?: Partial<CheckSpellingOptions>): void;
     /**
      * Performs a spelling check based on the supplied sentence and options.
      * The suggestions list will be provided to the resultHandler().
@@ -85,7 +86,8 @@ export declare abstract class SpellcheckerBase {
      * @param sentence string The sentence to perform spell checking on.
      * @param options CheckSpellingOptions The options to use for this spell check lookup
      */
-    checkSpellingCompound(sentence: Uint8Array | string, options?: Pick<CheckSpellingOptions, 'maxEditDistance'>): void;
+    checkSpellingCompound(sentence: Uint8Array | string, options?: Partial<Pick<CheckSpellingOptions, 'maxEditDistance'>>): void;
+    protected validateLookupDistance(distance: number): void;
     /**
      * @internal
      *

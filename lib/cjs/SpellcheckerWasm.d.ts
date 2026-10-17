@@ -19,7 +19,7 @@ export declare class SpellcheckerWasm extends SpellcheckerBase {
      * @param bigramLocation (optional) Path string or Response object for the bigram dictionary
      * @param options (optional) SymSpell options
      */
-    prepareSpellchecker(wasmLocation: string | Response, dictionaryLocation: string | Response, bigramLocation?: string | Response, options?: SymSpellOptions): Promise<void>;
+    prepareSpellchecker(wasmLocation: string | Response, dictionaryLocation: string | Response, bigramLocation?: string | Response, options?: Partial<SymSpellOptions>): Promise<void>;
     private loadDictionary;
     private streamReaderIntoDictionary;
 }
