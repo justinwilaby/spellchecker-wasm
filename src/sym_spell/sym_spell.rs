@@ -170,7 +170,9 @@ impl SymSpell {
         let parts: Vec<&str> = line.split(separator).collect();
         let key = parts[0].to_owned() + " " + parts[1];
 
-        let count = parts[2].trim_end().parse::<usize>().unwrap_or(0);
+        // The result wire format stores counts as u32; saturate instead of
+        // dropping large corpus counts on wasm32 or wrapping during encoding.
+        let count = parts[2].trim_end().parse::<u64>().map(|count| count.min(u32::MAX as u64) as usize).unwrap_or(0);
         self.bigrams.insert(key, count);
 
         if count < self.bigram_count_min {
@@ -198,7 +200,7 @@ impl SymSpell {
             return;
         }
         let key = parts[0].to_string();
-        let count = parts[1].trim_end().parse::<usize>().unwrap_or(0);
+        let count = parts[1].trim_end().parse::<u64>().map(|count| count.min(u32::MAX as u64) as usize).unwrap_or(0);
         self.create_dictionary_entry(key, count);
     }
 
@@ -931,6 +933,15 @@ impl SymSpell {
 #[cfg(test)]
 mod sym_spell_tests {
     use crate::sym_spell::sym_spell::SymSpell;
+
+    #[test]
+    fn large_unigram_and_bigram_counts_saturate() {
+        let mut sym = SymSpell::new(Some(2), Some(7), Some(1));
+        sym.write_line_to_dictionary("and 12997637966", " ");
+        sym.write_line_to_bigram_dictionary("words and 12997637966", " ");
+        assert_eq!(sym.words["and"], u32::MAX as usize);
+        assert_eq!(sym.bigrams["words and"], u32::MAX as usize);
+    }
 
     #[test]
     fn parse_words_test() {

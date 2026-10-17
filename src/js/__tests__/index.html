@@ -28,6 +28,38 @@
             await spellchecker.prepareSpellchecker(wasm, dictionary);
             console.log(`standard dictionary loaded in ${performance.now() - t} ms`);
 
+            for (const method of ['checkSpelling', 'checkSpellingCompound']) {
+                try {
+                    spellchecker[method]('hello', {maxEditDistance: 3});
+                    throw new Error(`${method} accepted a distance above dictionaryEditDistance`);
+                } catch (error) {
+                    if (!(error instanceof RangeError) || !error.message.includes('dictionaryEditDistance')) throw error;
+                }
+            }
+
+            // Exercise the original preparation path with Response streams and split lines.
+            const bytes = new TextEncoder().encode('hello 100\n\nworld 90\r\n');
+            const streamedDictionary = new Response(new ReadableStream({
+                start(controller) {
+                    for (let i = 0; i < bytes.length; i += 3) controller.enqueue(bytes.slice(i, i + 3));
+                    controller.close();
+                }
+            }));
+            const streamedChecker = new SpellcheckerWasm(results => { lastResults = results; });
+            await streamedChecker.prepareSpellchecker(await fetch('../../../lib/spellchecker-wasm.wasm'), streamedDictionary);
+            streamedChecker.checkSpelling('world', {maxEditDistance: 0, includeSelf: true});
+            if (lastResults[0]?.term !== 'world') throw new Error('Streamed CRLF dictionary lost final term');
+
+            try {
+                await new SpellcheckerWasm().prepareSpellchecker(
+                    await fetch('../../../lib/spellchecker-wasm.wasm'),
+                    new Response('Not found', {status: 404})
+                );
+                throw new Error('Failed dictionary Response was accepted');
+            } catch (error) {
+                if (!error.message.includes('Dictionary Response failed: 404')) throw error;
+            }
+
             let allPassed = true;
             for (const {correctSpelling, misspellings: words} of commonMisspellings) {
                 for (const word of words) {
