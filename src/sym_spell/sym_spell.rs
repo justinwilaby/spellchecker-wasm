@@ -34,8 +34,6 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::str;
 
-use unicode_normalization::UnicodeNormalization;
-
 use crate::edit_distance::{DistanceAlgorithm, EditDistance};
 use crate::grapheme_iterator::GraphemeClusters;
 use crate::sym_spell::suggested_item::SuggestItem;
@@ -790,7 +788,14 @@ impl SymSpell {
     /// the Sum of word occurence probabilities in log scale (a measure of how common and probable the corrected segmentation is).</returns>
     /// Normalizes input for lookup: Nfkc normalization, lowercase, remove hyphens
     fn normalize_for_lookup(input: &str) -> String {
-        input.nfkc().to_string().to_lowercase().replace('-', "")
+        input
+            .replace("ﬀ", "ff")
+            .replace("ﬁ", "fi")
+            .replace("ﬂ", "fl")
+            .replace("ﬃ", "ffi")
+            .replace("ﬄ", "ffl")
+            .to_lowercase()
+            .replace('-', "")
     }
 
     pub fn word_segmentation(

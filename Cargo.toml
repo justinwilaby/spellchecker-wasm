@@ -8,8 +8,10 @@ categories = ["wasm"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
-unicode-normalization = "0.1.22"
 
 [profile.release]
 lto = true
