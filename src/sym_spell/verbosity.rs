@@ -1,4 +1,5 @@
 /// <summary>Controls the closeness/quantity of returned spelling suggestions.</summary>
+#[repr(C)]
 #[derive(PartialEq)]
 pub enum Verbosity {
     /// <summary>Top suggestion with the highest term frequency of the suggestions of smallest edit distance found.</summary>

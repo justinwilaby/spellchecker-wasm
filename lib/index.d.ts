@@ -1,3 +1,3 @@
-export * from './SpellcheckerWasm';
-export * from './SuggestedItem';
-export * from './utils';
+export { SpellcheckerWasm } from './SpellcheckerWasm.ts';
+export * from './SuggestedItem.ts';
+export { Verbosity, defaultOptions, defaultCheckSpellingOptions } from './SpellCheckerBase.ts';

@@ -1,6 +1,6 @@
-use std::str;
-use std::ops::{Range, Index};
 use std::cell::RefCell;
+use std::ops::{Index, Range};
+use std::str;
 
 pub struct GraphemeClusters<'a> {
     bytes: &'a [u8],
@@ -11,7 +11,7 @@ pub struct GraphemeClusters<'a> {
 }
 
 impl GraphemeClusters<'_> {
-    pub fn new(s: &str) -> GraphemeClusters {
+    pub fn new(s: &str) -> GraphemeClusters<'_> {
         GraphemeClusters {
             bytes: s.as_bytes(),
             cursor: 0,
@@ -41,8 +41,16 @@ impl GraphemeClusters<'_> {
     pub fn get_slice_range(&self, range: Range<usize>) -> Range<usize> {
         let mut byte_indices = self.byte_indices.borrow_mut();
         let mut largest_idx = byte_indices.len() - 1;
-        let mut start_idx = if largest_idx >= range.start { byte_indices[range.start] } else { byte_indices[largest_idx] };
-        let mut end_idx = if largest_idx >= range.end { byte_indices[range.end] } else { byte_indices[largest_idx] };
+        let mut start_idx = if largest_idx >= range.start {
+            byte_indices[range.start]
+        } else {
+            byte_indices[largest_idx]
+        };
+        let mut end_idx = if largest_idx >= range.end {
+            byte_indices[range.end]
+        } else {
+            byte_indices[largest_idx]
+        };
 
         while largest_idx < range.end {
             let byte = self.bytes[end_idx];

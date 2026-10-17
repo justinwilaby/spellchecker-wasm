@@ -1,4 +1,4 @@
-import {deserializeSuggestedItems, SuggestedItem} from "./SuggestedItem";
+import {deserializeSuggestedItems, SuggestedItem} from "./SuggestedItem.ts";
 
 export interface WasmSymSpell extends WebAssembly.Exports {
     memory: WebAssembly.Memory;
@@ -13,15 +13,17 @@ export interface WasmSymSpell extends WebAssembly.Exports {
     write_to_dictionary: (prt: number, length: number, isBigram: boolean) => void;
 }
 
-export enum Verbosity {
+export const Verbosity = {
     // Top suggestion with the highest term frequency of the suggestions of smallest edit distance found.
-    Top,
+    Top: 0,
     // All suggestions of smallest edit distance found, suggestions ordered by term frequency.
-    Closest,
+    Closest: 1,
     //All suggestions within maxEditDistance, suggestions ordered by edit distance
     // , then by term frequency (slower, no early termination).</summary>
-    All,
-}
+    All: 2,
+} as const;
+
+export type Verbosity = typeof Verbosity[keyof typeof Verbosity];
 
 export interface SymSpellOptions {
 
@@ -70,8 +72,8 @@ export const defaultCheckSpellingOptions: CheckSpellingOptions = {
  * This class provides the wrapper for the spellcheck-wasm.wasm functionality.
  */
 export abstract class SpellcheckerBase {
-    protected wasmSymSpell: WasmSymSpell;
-    protected writeBuffer: Uint8Array;
+    protected wasmSymSpell!: WasmSymSpell;
+    protected writeBuffer!: Uint8Array;
 
     /**
      * The handler set by the consumer to receive
@@ -80,7 +82,7 @@ export abstract class SpellcheckerBase {
     public resultHandler: ResultsHandler;
 
     protected constructor(resultHandler?: ResultsHandler) {
-        this.resultHandler = resultHandler;
+        this.resultHandler = resultHandler!;
     }
 
     protected abstract encodeString(str: string): Uint8Array;
@@ -110,16 +112,16 @@ export abstract class SpellcheckerBase {
      * @param bigramLocation
      * @param options
      */
-    public abstract async prepareSpellchecker(
+    public abstract prepareSpellchecker(
         wasmLocation: string,
         dictionaryLocation: string,
-        bigramLocation: string,
-        options: SymSpellOptions): Promise<void>;
-    public abstract async prepareSpellchecker(
+        bigramLocation?: string,
+        options?: SymSpellOptions): Promise<void>;
+    public abstract prepareSpellchecker(
         wasFetchResponse: Response,
         dictionaryFetchResponse: Response,
-        bigramFetchResponse: Response,
-        options: SymSpellOptions): Promise<void>
+        bigramFetchResponse?: Response,
+        options?: SymSpellOptions): Promise<void>
 
     /**
      * Performs a single spelling check based on the supplied word and options.
