@@ -68,6 +68,31 @@ mod tests {
     }
 
     #[test]
+    fn write_to_dictionary_multilingual_test() -> Result<()> {
+        let mut sym_spell = SymSpell::new(Some(2), Some(7), Some(1));
+        let f = File::open("lib/frequency_dictionary_de.txt")?;
+        let mut reader = BufReader::new(f);
+        let mut s = String::new();
+
+        loop {
+            let len = reader.read_line(&mut s)?;
+            if len == 0 {
+                break;
+            }
+            sym_spell.write_line_to_dictionary(&s, " ");
+            s.truncate(0);
+        }
+
+        let result = sym_spell.lookup("korektur", Verbosity::Closest, 2, false, false);
+        assert_eq!(
+            result[0].term, "korrektur",
+            "German dictionary lookup failed"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn include_unknown_only_returns_words_missing_from_dictionary() {
         let mut sym_spell = SymSpell::new(Some(2), Some(7), Some(1));
         sym_spell.create_dictionary_entry("eradicate".to_string(), 42);

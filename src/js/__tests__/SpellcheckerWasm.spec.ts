@@ -305,6 +305,38 @@ describe('SpellcheckerWasm - Multi-byte UTF-8', () => {
     });
 });
 
+describe('SpellcheckerWasm - Multilingual dictionaries', () => {
+    const languageTests = [
+        { lang: 'de', word: 'korektur', expected: 'korrektur' },
+        { lang: 'fr', word: 'langu', expected: 'langue' },
+        { lang: 'it', word: 'linguaa', expected: 'lingua' },
+        { lang: 'es', word: 'lenguaa', expected: 'lengua' },
+        { lang: 'he', word: 'שפה', expected: 'שפה' },
+        { lang: 'ru', word: 'язык', expected: 'язык' }
+    ];
+
+    for (const { lang, word, expected } of languageTests) {
+        it(`should load and lookup in ${lang} dictionary`, { timeout: 30000 }, async () => {
+            let lastResults: SuggestedItem[];
+            const resultsHandler: ResultsHandler = (results) => {
+                lastResults = results;
+            };
+            const spellchecker = new SpellcheckerWasm(resultsHandler);
+
+            await spellchecker.prepareSpellchecker(
+                wasmPath,
+                join(__dirname, `../../../lib/frequency_dictionary_${lang}.txt`)
+            );
+            spellchecker.checkSpelling(word, {
+                maxEditDistance: 2,
+                includeUnknown: false,
+                includeSelf: true
+            });
+            assert.equal(lastResults![0].term, expected);
+        });
+    }
+});
+
 describe('SpellcheckerWasm - includeUnknown and includeSelf', () => {
     it('distinguishes a known input from an unknown input in Closest and All modes', async () => {
         const directory = await mkdtemp(join(tmpdir(), 'spellchecker-wasm-27-'));
