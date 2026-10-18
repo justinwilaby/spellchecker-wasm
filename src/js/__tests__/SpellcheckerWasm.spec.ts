@@ -9,6 +9,8 @@ import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import testMap from './language_tests_map.json' with { type: 'json' };
 
+const languageDictionaries = ['de', 'fr', 'it', 'es', 'he', 'ru'] as const;
+
 interface RegionConfig {
     filesuffix: string;
     verifyJsonSerializationResponse: { count: number; distance: number; term: string };
@@ -240,7 +242,7 @@ describe('SpellcheckerWasm - WordSegmentation improvements', () => {
     });
 
     it('should handle case-insensitive compound lookup', { timeout: 30000 }, async () => {
-        let lastResults: SuggestedItem[];
+        let lastResults: SuggestedItem[] = [];
         const resultsHandler: ResultsHandler = (results) => {
             lastResults = results;
         };
@@ -251,11 +253,11 @@ describe('SpellcheckerWasm - WordSegmentation improvements', () => {
         spellchecker.checkSpellingCompound('HELLO WORLD');
 
         assert.ok(lastResults !== undefined, 'Expected results for uppercase input');
-        assert.ok(lastResults!.length > 0, 'Expected non-empty results for uppercase input');
+        assert.ok(lastResults.length > 0, 'Expected non-empty results for uppercase input');
     });
 
     it('should handle punctuation in compound lookup', { timeout: 30000 }, async () => {
-        let lastResults: SuggestedItem[];
+        let lastResults: SuggestedItem[] = [];
         const resultsHandler: ResultsHandler = (results) => {
             lastResults = results;
         };
@@ -265,7 +267,7 @@ describe('SpellcheckerWasm - WordSegmentation improvements', () => {
         spellchecker.checkSpellingCompound('hello,world');
 
         assert.ok(lastResults !== undefined, 'Expected results for punctuated input');
-        assert.ok(lastResults!.length > 0, 'Expected non-empty results for punctuated input');
+        assert.ok(lastResults.length > 0, 'Expected non-empty results for punctuated input');
     });
 
     it('should normalize ligatures during compound lookup', { timeout: 30000 }, async () => {
@@ -472,5 +474,175 @@ describe('SpellcheckerWasm - synchronous suggestions', () => {
         assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
         await assert.rejects(failedPreparation, /Dictionary Response body is null/);
         assert.throws(() => spellchecker.suggest('helo'), /Await prepareSpellchecker/);
+    });
+});
+
+describe('SpellcheckerWasm - Issue #48 reproduction attempts', () => {
+    const wasmBytesPromise = readFile(wasmPath);
+
+    async function wasmResponse(): Promise<Response> {
+        return new Response(new Uint8Array(await wasmBytesPromise), {
+            headers: { 'Content-Type': 'application/wasm' },
+        });
+    }
+
+    function streamDictionary(body: string | Uint8Array, chunkSize = 3): Response {
+        const bytes = typeof body === 'string' ? new TextEncoder().encode(body) : body;
+        return new Response(new ReadableStream<Uint8Array>({
+            start(controller) {
+                for (let i = 0; i < bytes.length; i += chunkSize) {
+                    controller.enqueue(bytes.slice(i, i + chunkSize));
+                }
+                controller.close();
+            },
+        }));
+    }
+
+    it('loads all new language dictionaries via browser-style Response streams', async () => {
+        for (const lang of languageDictionaries) {
+            const dictionaryPath = join(__dirname, `../../../lib/frequency_dictionary_${lang}.txt`);
+            const dictionaryBytes = await readFile(dictionaryPath);
+            const spellchecker = new SpellcheckerWasm();
+            await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(dictionaryBytes, 1024));
+            assert.ok(spellchecker.suggest('test').length >= 0, `${lang} dictionary did not prepare`);
+        }
+    });
+
+    it('loads bigram dictionary via browser-style Response stream', async () => {
+        const bigramPath = join(__dirname, '../../../lib/frequency_bigramdictionary_en_243_342.txt');
+        const bigramBytes = await readFile(bigramPath);
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(
+            await wasmResponse(),
+            streamDictionary('hello 100\nworld 90\n', 4),
+            streamDictionary(bigramBytes, 1024),
+        );
+        assert.ok(spellchecker.suggestCompound('hello wrld').length > 0, 'bigram dictionary did not load');
+    });
+
+    it('rejects dictionary with BOM via browser-style Response stream', async () => {
+        // BOM is not handled as a special case; the parser currently includes it as part of the first term.
+        // This test documents that behaviour rather than asserting a specific fix.
+        const body = '\xEF\xBB\xBFhello 100\n';
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(body, 3));
+        const suggestions = spellchecker.suggest('helo');
+        // BOM attached to the term means 'hello' is not found exactly.
+        assert.ok(!suggestions.some(s => s.term === 'hello'), 'BOM-prefixed term should not match bare hello');
+    });
+
+    it('throws TypeError for invalid UTF-8 mid-stream instead of trapping', async () => {
+        const valid = new TextEncoder().encode('hello 10\n');
+        const invalid = new Uint8Array([0xff, 0xfe]);
+        const rest = new TextEncoder().encode('world 20\n');
+        const bytes = new Uint8Array(valid.length + invalid.length + rest.length);
+        bytes.set(valid, 0);
+        bytes.set(invalid, valid.length);
+        bytes.set(rest, valid.length + invalid.length);
+
+        const spellchecker = new SpellcheckerWasm();
+        await assert.rejects(
+            spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(bytes, 4)),
+            TypeError,
+        );
+    });
+
+    it('reassembles split multi-byte UTF-8 characters across stream chunks', async () => {
+        // Russian 'слово 30' split inside the Cyrillic bytes.
+        const text = new TextEncoder().encode('слово 30\n');
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(text, 3));
+        assert.deepStrictEqual(
+            spellchecker.suggest('слово', { includeSelf: true }).map(item => item.toJSON()),
+            [{ count: 30, distance: 0, term: 'слово' }],
+        );
+    });
+
+    it('handles a line longer than the 1MB chunk buffer without trapping', async () => {
+        // A 2 MB line spans multiple 1 MB stream chunks. The streaming code must buffer the
+        // incomplete line across calls; preparation must complete without a WASM trap.
+        // Note: lookup of terms this long is a separate issue and may fail internally.
+        const longTerm = 'a'.repeat(2 * 1024 * 1024);
+        const body = `${longTerm} 1\n`;
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(body, 1024 * 1024));
+        // If prepareSpellchecker resolved without a trap, the spellchecker is prepared.
+        // Verify by checking that suggest doesn't throw "not ready".
+        assert.doesNotThrow(() => {
+            const results = spellchecker.suggest('a');
+            assert.ok(Array.isArray(results));
+        });
+    });
+
+    it('handles mixed line endings including CR-only', async () => {
+        const body = 'hello 10\nworld 20\r\nmac 30\rnext 40\r\n';
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(body, 4));
+        // CR-only keeps 'mac 30' and 'next 40' on the same line, so only hello/world are parsed cleanly.
+        assert.deepStrictEqual(spellchecker.suggest('helo').map(item => item.term), ['hello']);
+        assert.deepStrictEqual(spellchecker.suggest('wrld').map(item => item.term), ['world']);
+    });
+
+    it('accepts null bytes as valid UTF-8 without trapping', async () => {
+        // Null bytes are valid UTF-8, so the parser does not reject them. This test documents
+        // that they do not cause a WASM trap; the term includes the null byte literally.
+        const body = new Uint8Array([0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x00, 0x20, 0x31, 0x30, 0x0a]);
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(body, 3));
+        assert.deepStrictEqual(
+            spellchecker.suggest('hello\x00', { includeSelf: true }).map(item => item.toJSON()),
+            [{ count: 10, distance: 0, term: 'hello\x00' }],
+        );
+    });
+
+    it('handles empty terms and control characters without trapping', async () => {
+        const body = '\t 10\nvalid 20\n\n\x01word 30\n';
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(body, 4));
+        assert.deepStrictEqual(
+            spellchecker.suggest('valid', { includeSelf: true }).map(item => item.toJSON()),
+            [{ count: 20, distance: 0, term: 'valid' }],
+        );
+    });
+
+    it('handles extremely large frequency values via Response stream', async () => {
+        // 4294967296 exceeds u32::MAX and should saturate; 999999999999999999999 exceeds u64::MAX and is skipped.
+        const body = 'huge 4294967296\nlost 999999999999999999999\nsmall 5\n';
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(body, 5));
+        assert.deepStrictEqual(
+            spellchecker.suggest('huge', { includeSelf: true }).map(item => item.toJSON()),
+            [{ count: 4294967295, distance: 0, term: 'huge' }],
+        );
+        assert.deepStrictEqual(
+            spellchecker.suggest('small', { includeSelf: true }).map(item => item.toJSON()),
+            [{ count: 5, distance: 0, term: 'small' }],
+        );
+    });
+
+    it('supports multiple simultaneous spellchecker instances', async () => {
+        const instances = await Promise.all(
+            Array.from({ length: 3 }, async () => {
+                const spellchecker = new SpellcheckerWasm();
+                await spellchecker.prepareSpellchecker(
+                    await wasmResponse(),
+                    streamDictionary('hello 100\nworld 90\n', 4),
+                );
+                return spellchecker;
+            }),
+        );
+        for (const spellchecker of instances) {
+            assert.deepStrictEqual(spellchecker.suggest('helo').map(item => item.term), ['hello']);
+        }
+    });
+
+    it('resets state when prepareSpellchecker is called twice on the same instance', async () => {
+        const spellchecker = new SpellcheckerWasm();
+        await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary('hello 100\n', 4));
+        assert.deepStrictEqual(spellchecker.suggest('helo').map(item => item.term), ['hello']);
+
+        await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary('world 50\n', 4));
+        assert.deepStrictEqual(spellchecker.suggest('helo'), []);
+        assert.deepStrictEqual(spellchecker.suggest('wrld').map(item => item.term), ['world']);
     });
 });

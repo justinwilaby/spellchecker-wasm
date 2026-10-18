@@ -10,9 +10,19 @@
 
     window.testResults = { passed: 0, failed: 0, errors: [] };
 
+    function streamResponse(body, chunkSize = 3) {
+        const bytes = typeof body === 'string' ? new TextEncoder().encode(body) : body;
+        return new Response(new ReadableStream({
+            start(controller) {
+                for (let i = 0; i < bytes.length; i += chunkSize) controller.enqueue(bytes.slice(i, i + chunkSize));
+                controller.close();
+            }
+        }));
+    }
+
     async function runTests() {
         const spellchecker = new SpellcheckerWasm();
-        
+
         let lastResults;
         spellchecker.resultHandler = results => {
             lastResults = results;
@@ -39,12 +49,7 @@
 
             // Exercise the original preparation path with Response streams and split lines.
             const bytes = new TextEncoder().encode('hello 100\n\nworld 90\r\n');
-            const streamedDictionary = new Response(new ReadableStream({
-                start(controller) {
-                    for (let i = 0; i < bytes.length; i += 3) controller.enqueue(bytes.slice(i, i + 3));
-                    controller.close();
-                }
-            }));
+            const streamedDictionary = streamResponse(bytes, 3);
             const streamedChecker = new SpellcheckerWasm(results => { lastResults = results; });
             await streamedChecker.prepareSpellchecker(await fetch('../../../lib/spellchecker-wasm.wasm'), streamedDictionary);
             streamedChecker.checkSpelling('world', {maxEditDistance: 0, includeSelf: true});
@@ -58,6 +63,82 @@
                 throw new Error('Failed dictionary Response was accepted');
             } catch (error) {
                 if (!error.message.includes('Dictionary Response failed: 404')) throw error;
+            }
+
+            // Issue #48: new language dictionaries via browser Response streams.
+            for (const lang of ['de', 'fr', 'it', 'es', 'he', 'ru']) {
+                const langDictionary = await fetch(`../../../lib/frequency_dictionary_${lang}.txt`);
+                const langChecker = new SpellcheckerWasm();
+                try {
+                    await langChecker.prepareSpellchecker(await fetch('../../../lib/spellchecker-wasm.wasm'), langDictionary);
+                } catch (error) {
+                    throw new Error(`${lang} dictionary failed: ${error.message}`);
+                }
+                if (!langChecker.prepared) throw new Error(`${lang} dictionary did not prepare`);
+            }
+
+            // Issue #48: bigram dictionary via Response stream.
+            const bigramDictionary = await fetch('../../../lib/frequency_bigramdictionary_en_243_342.txt');
+            const bigramChecker = new SpellcheckerWasm();
+            await bigramChecker.prepareSpellchecker(
+                await fetch('../../../lib/spellchecker-wasm.wasm'),
+                streamResponse('hello 100\nworld 90\n', 4),
+                bigramDictionary
+            );
+            if (!bigramChecker.suggestCompound('hello wrld').some(item => item.term === 'hello world')) {
+                throw new Error('Bigram dictionary did not load from Response stream');
+            }
+
+            // Issue #48: invalid UTF-8 mid-stream throws TypeError, does not trap.
+            const invalidUtf8 = new Uint8Array([104, 101, 108, 108, 111, 32, 49, 48, 10, 255, 254, 119, 111, 114, 108, 100, 32, 50, 48, 10]);
+            try {
+                await new SpellcheckerWasm().prepareSpellchecker(
+                    await fetch('../../../lib/spellchecker-wasm.wasm'),
+                    streamResponse(invalidUtf8, 4)
+                );
+                throw new Error('Invalid UTF-8 dictionary was accepted');
+            } catch (error) {
+                if (!(error instanceof TypeError)) throw error;
+            }
+
+            // Issue #48: split multi-byte UTF-8 reassembles correctly.
+            const russian = new TextEncoder().encode('слово 30\n');
+            const russianChecker = new SpellcheckerWasm();
+            await russianChecker.prepareSpellchecker(await fetch('../../../lib/spellchecker-wasm.wasm'), streamResponse(russian, 3));
+            const russianResult = russianChecker.suggest('слово', {includeSelf: true});
+            if (russianResult.length !== 1 || russianResult[0].term !== 'слово') {
+                throw new Error('Split multi-byte UTF-8 character was not reassembled');
+            }
+
+            // Issue #48: CR-only line endings do not trap (documented behaviour: CR-only is not a line break).
+            const crOnly = new TextEncoder().encode('hello 10\nworld 20\r\nmac 30\rnext 40\r\n');
+            const crChecker = new SpellcheckerWasm();
+            await crChecker.prepareSpellchecker(await fetch('../../../lib/spellchecker-wasm.wasm'), streamResponse(crOnly, 4));
+            if (!crChecker.suggest('helo').some(item => item.term === 'hello')) {
+                throw new Error('CR-only mixed endings broke parsing');
+            }
+
+            // Issue #48: multiple simultaneous instances do not share corrupted state.
+            const instances = await Promise.all(Array.from({length: 3}, async () => {
+                const instance = new SpellcheckerWasm();
+                await instance.prepareSpellchecker(
+                    await fetch('../../../lib/spellchecker-wasm.wasm'),
+                    streamResponse('hello 100\nworld 90\n', 4)
+                );
+                return instance;
+            }));
+            for (const instance of instances) {
+                if (!instance.suggest('helo').some(item => item.term === 'hello')) {
+                    throw new Error('Simultaneous instance corrupted another instance');
+                }
+            }
+
+            // Issue #48: re-preparing resets state.
+            const resetChecker = new SpellcheckerWasm();
+            await resetChecker.prepareSpellchecker(await fetch('../../../lib/spellchecker-wasm.wasm'), streamResponse('hello 100\n', 4));
+            await resetChecker.prepareSpellchecker(await fetch('../../../lib/spellchecker-wasm.wasm'), streamResponse('world 50\n', 4));
+            if (resetChecker.suggest('helo').length !== 0 || !resetChecker.suggest('wrld').some(item => item.term === 'world')) {
+                throw new Error('Re-preparing did not reset dictionary state');
             }
 
             let allPassed = true;

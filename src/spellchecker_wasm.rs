@@ -25,7 +25,11 @@ pub unsafe extern "C" fn symspell(max_dictionary_edit_distance: usize, count_thr
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn write_to_dictionary(ptr: *const u8, length: usize, is_bigram: bool) -> bool {
+pub unsafe extern "C" fn write_to_dictionary(
+    ptr: *const u8,
+    length: usize,
+    is_bigram: bool,
+) -> bool {
     let buffer_cell = BUFFER.as_ref().unwrap();
     let sym_cell = SYM.as_ref().unwrap();
     let mut sym = sym_cell.borrow_mut();
@@ -41,11 +45,24 @@ fn consume_dictionary_lines(buffer: &mut Vec<u8>, sym: &mut SymSpell, is_bigram:
     for i in 0..len {
         let ch = buffer[i];
         if ch == b'\n' {
-            let end = if i > cursor && buffer[i - 1] == b'\r' { i - 1 } else { i };
+            let end = if i > cursor && buffer[i - 1] == b'\r' {
+                i - 1
+            } else {
+                i
+            };
             if end > cursor {
                 let chunk = match str::from_utf8(&buffer[cursor..end]) {
                     Ok(chunk) => chunk,
-                    Err(_) => return false,
+                    Err(e) => {
+                        eprintln!(
+                            "Invalid UTF-8 at bytes {}..{} (valid_up_to={}): {:?}",
+                            cursor,
+                            end,
+                            e.valid_up_to(),
+                            &buffer[cursor..end.min(cursor + 80)]
+                        );
+                        return false;
+                    }
                 };
                 if is_bigram {
                     sym.write_line_to_bigram_dictionary(chunk, " ");
@@ -80,7 +97,12 @@ mod dictionary_stream_tests {
         buffer.extend_from_slice(&russian[3..]);
         assert!(consume_dictionary_lines(&mut buffer, &mut sym, false));
         for (term, count) in [("hello", 10), ("world", 20), ("слово", 30)] {
-            assert_eq!(sym.lookup(term, Verbosity::Top, 0, false, true)[0].count, count, "{}", term);
+            assert_eq!(
+                sym.lookup(term, Verbosity::Top, 0, false, true)[0].count,
+                count,
+                "{}",
+                term
+            );
         }
     }
 
@@ -89,7 +111,9 @@ mod dictionary_stream_tests {
         let mut sym = SymSpell::new(Some(2), Some(7), Some(1));
         let mut buffer = b"bad\xff 10\nvalid 20\n".to_vec();
         assert!(!consume_dictionary_lines(&mut buffer, &mut sym, false));
-        assert!(sym.lookup("valid", Verbosity::Top, 0, false, true).is_empty());
+        assert!(sym
+            .lookup("valid", Verbosity::Top, 0, false, true)
+            .is_empty());
     }
 
     #[test]
@@ -97,7 +121,65 @@ mod dictionary_stream_tests {
         let mut sym = SymSpell::new(Some(2), Some(7), Some(1));
         let mut buffer = b"and 12997637966\n".to_vec();
         assert!(consume_dictionary_lines(&mut buffer, &mut sym, false));
-        assert_eq!(sym.lookup("and", Verbosity::Top, 0, false, true)[0].count, u32::MAX as usize);
+        assert_eq!(
+            sym.lookup("and", Verbosity::Top, 0, false, true)[0].count,
+            u32::MAX as usize
+        );
+    }
+
+    #[test]
+    fn russian_dictionary_at_1mb_chunk_boundary() {
+        // Reproduces the browser/Response path where a multi-byte character is split at a 1 MB chunk.
+        let russian = std::fs::read("lib/frequency_dictionary_ru.txt").unwrap();
+        let chunk_size = 1024 * 1024;
+        let mut sym = SymSpell::new(Some(2), Some(7), Some(1));
+        let mut buffer = Vec::new();
+        for chunk in russian.chunks(chunk_size) {
+            buffer.extend_from_slice(chunk);
+            assert!(
+                consume_dictionary_lines(&mut buffer, &mut sym, false),
+                "consume_dictionary_lines failed after chunk ending near byte {}",
+                chunk.as_ptr() as usize - russian.as_ptr() as usize + chunk.len()
+            );
+        }
+        assert!(
+            consume_dictionary_lines(&mut buffer, &mut sym, false),
+            "consume_dictionary_lines failed on final flush"
+        );
+        assert!(
+            !sym.lookup("и", Verbosity::Top, 0, false, true).is_empty(),
+            "russian dictionary should contain common entries"
+        );
+        // Specific regression check: the word split across the 1 MB boundary.
+        let crossing_word = "большаков"; // inferred from boundary bytes б о л ь ш а к о в
+        let suggestions = sym.lookup(crossing_word, Verbosity::Top, 0, false, true);
+        assert!(
+            !suggestions.is_empty(),
+            "expected '{}' to be in dictionary",
+            crossing_word
+        );
+    }
+
+    #[test]
+    fn russian_dictionary_simulate_wasm_memory_copy() {
+        // Simulates the JS path: each chunk is first written to a separate WASM-memory-like
+        // buffer, then copied into the dictionary buffer by write_to_dictionary.
+        let russian = std::fs::read("lib/frequency_dictionary_ru.txt").unwrap();
+        let chunk_size = 1024 * 1024;
+        let mut sym = SymSpell::new(Some(2), Some(7), Some(1));
+        let mut dictionary_buffer = Vec::new();
+        for chunk in russian.chunks(chunk_size) {
+            let wasm_memory_chunk = chunk.to_vec();
+            dictionary_buffer.extend_from_slice(&wasm_memory_chunk);
+            assert!(
+                consume_dictionary_lines(&mut dictionary_buffer, &mut sym, false),
+                "consume_dictionary_lines failed after simulated WASM copy"
+            );
+        }
+        assert!(
+            !sym.lookup("и", Verbosity::Top, 0, false, true).is_empty(),
+            "russian dictionary should contain common entries"
+        );
     }
 }
 
