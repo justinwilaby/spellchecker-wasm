@@ -82,7 +82,7 @@ export declare abstract class SpellcheckerBase {
      */
     checkSpelling(word: Uint8Array | string, options?: Partial<CheckSpellingOptions>): void;
     /** Returns the suggestions for this word synchronously after preparation. */
-    suggest(word: Uint8Array | string, options?: CheckSpellingOptions): SuggestedItem[];
+    suggest(word: Uint8Array | string, options?: Partial<CheckSpellingOptions>): SuggestedItem[];
     /**
      * Performs a spelling check based on the supplied sentence and options.
      * The suggestions list will be provided to the resultHandler().
