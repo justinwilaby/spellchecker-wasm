@@ -56,6 +56,27 @@ const { dirname, join } = require('node:path');
 })();
 ```
 
+## Multilingual dictionaries
+
+Spellcheck-wasm ships with frequency dictionaries for six languages:
+
+| Language | Dictionary file | Entries |
+|----------|-----------------|---------|
+| German   | `frequency_dictionary_de.txt` | 100,000 |
+| French   | `frequency_dictionary_fr.txt` | 100,000 |
+| Italian  | `frequency_dictionary_it.txt` | 100,000 |
+| Spanish  | `frequency_dictionary_es.txt` | 100,000 |
+| Hebrew   | `frequency_dictionary_he.txt` | 100,000 |
+| Russian  | `frequency_dictionary_ru.txt` | 100,000 |
+
+All dictionaries are UTF-8 encoded and sourced from the [SymSpell Frequency Dictionary](https://github.com/wolfgarbe/SymSpell/tree/master/SymSpell.FrequencyDictionary) project (MIT licensed, master branch as of Oct 2026). They are loaded the same way as the English dictionaries:
+
+```typescript
+const deDictionary = join(libDir, 'frequency_dictionary_de.txt');
+await spellchecker.prepareSpellchecker(wasmPath, deDictionary);
+const suggestions = spellchecker.suggest('Spellepruefung'); // German spelling correction
+```
+
 ## Usage in Node
 ```typescript
 import { SpellcheckerWasm } from 'spellchecker-wasm';

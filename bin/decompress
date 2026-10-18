@@ -9,7 +9,13 @@ const __dirname = path.dirname(__filename);
 const filenames = [
     "frequency_bigramdictionary_en_243_342.txt",
     "frequency_dictionary_en_82_765.txt",
-    "frequency_dictionary_en_US_60size_1M_1gram_20090715.txt"
+    "frequency_dictionary_en_US_60size_1M_1gram_20090715.txt",
+    "frequency_dictionary_de.txt",
+    "frequency_dictionary_fr.txt",
+    "frequency_dictionary_it.txt",
+    "frequency_dictionary_es.txt",
+    "frequency_dictionary_he.txt",
+    "frequency_dictionary_ru.txt"
 ].map((filepath) => path.resolve(__dirname, "../lib/", filepath));
 
 for (const file of filenames) {
