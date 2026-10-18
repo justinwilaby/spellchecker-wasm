@@ -150,7 +150,7 @@ export abstract class SpellcheckerBase {
     }
 
     /** Returns the suggestions for this word synchronously after preparation. */
-    public suggest(word: Uint8Array | string, options?: CheckSpellingOptions): SuggestedItem[] {
+    public suggest(word: Uint8Array | string, options?: Partial<CheckSpellingOptions>): SuggestedItem[] {
         return this.captureResults(() => this.checkSpelling(word, options));
     }
 

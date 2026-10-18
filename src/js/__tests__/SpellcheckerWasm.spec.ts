@@ -242,7 +242,7 @@ describe('SpellcheckerWasm - WordSegmentation improvements', () => {
     });
 
     it('should handle case-insensitive compound lookup', { timeout: 30000 }, async () => {
-        let lastResults: SuggestedItem[];
+        let lastResults: SuggestedItem[] = [];
         const resultsHandler: ResultsHandler = (results) => {
             lastResults = results;
         };
@@ -253,11 +253,11 @@ describe('SpellcheckerWasm - WordSegmentation improvements', () => {
         spellchecker.checkSpellingCompound('HELLO WORLD');
 
         assert.ok(lastResults !== undefined, 'Expected results for uppercase input');
-        assert.ok(lastResults!.length > 0, 'Expected non-empty results for uppercase input');
+        assert.ok(lastResults.length > 0, 'Expected non-empty results for uppercase input');
     });
 
     it('should handle punctuation in compound lookup', { timeout: 30000 }, async () => {
-        let lastResults: SuggestedItem[];
+        let lastResults: SuggestedItem[] = [];
         const resultsHandler: ResultsHandler = (results) => {
             lastResults = results;
         };
@@ -267,7 +267,7 @@ describe('SpellcheckerWasm - WordSegmentation improvements', () => {
         spellchecker.checkSpellingCompound('hello,world');
 
         assert.ok(lastResults !== undefined, 'Expected results for punctuated input');
-        assert.ok(lastResults!.length > 0, 'Expected non-empty results for punctuated input');
+        assert.ok(lastResults.length > 0, 'Expected non-empty results for punctuated input');
     });
 
     it('should normalize ligatures during compound lookup', { timeout: 30000 }, async () => {
@@ -566,7 +566,12 @@ describe('SpellcheckerWasm - Issue #48 reproduction attempts', () => {
         const body = `${longTerm} 1\n`;
         const spellchecker = new SpellcheckerWasm();
         await spellchecker.prepareSpellchecker(await wasmResponse(), streamDictionary(body, 1024 * 1024));
-        assert.ok(spellchecker.prepared, 'spellchecker should be prepared after streaming a >1MB line');
+        // If prepareSpellchecker resolved without a trap, the spellchecker is prepared.
+        // Verify by checking that suggest doesn't throw "not ready".
+        assert.doesNotThrow(() => {
+            const results = spellchecker.suggest('a');
+            assert.ok(Array.isArray(results));
+        });
     });
 
     it('handles mixed line endings including CR-only', async () => {
